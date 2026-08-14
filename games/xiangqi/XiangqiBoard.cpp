@@ -3,22 +3,22 @@
 #include <QMouseEvent>
 #include <QPainter>
 
-namespace {
-
-// 交叉点坐标（逻辑 600×600）
-inline QPoint pt(int row, int col)
-{
-    return QPoint(XiangqiBoard::kMargin + col * XiangqiBoard::kCell,
-                  XiangqiBoard::kMargin + row * XiangqiBoard::kCell);
-}
-
-} // namespace
-
 XiangqiBoard::XiangqiBoard(QWidget* parent)
     : QWidget(parent)
 {
     setMinimumSize(400, 400);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+}
+
+// 交叉点坐标（逻辑 600 系）：图片模式按图片网格校准，程序模式用固定边距/格距
+QPointF XiangqiBoard::cellPoint(int row, int col) const
+{
+    if (!m_boardBg.isNull())
+    {
+        const float s = static_cast<float>(kLogicSize) / kImgSize;
+        return QPointF((kImgX0 + col * kImgCellX) * s, (kImgY0 + row * kImgCellY) * s);
+    }
+    return QPointF(kMargin + col * kCell, kMargin + row * kCell);
 }
 
 void XiangqiBoard::setSelected(int row, int col)
@@ -54,7 +54,7 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
     const float scale = qMin(width(), height()) / static_cast<float>(kLogicSize);
     painter.scale(scale, scale);
 
-    // 底：图片（预留）或按风格程序绘制
+    // 底：图片（用户棋盘图，自带网格）或按风格程序绘制
     if (!m_boardBg.isNull())
     {
         painter.drawPixmap(0, 0, kLogicSize, kLogicSize, m_boardBg);
@@ -67,9 +67,8 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
                         : m_style == 3 ? QColor(158, 106, 82)
                                        : QColor(243, 234, 214);
         painter.fillRect(0, 0, kLogicSize, kLogicSize, bg);
+        drawBoard(painter);  // 程序绘制模式才画网格（图片模式用图片自带网格）
     }
-
-    drawBoard(painter);
 
     if (!m_chess)
     {
@@ -91,7 +90,7 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
     // 选中高亮（最上层）
     if (m_selRow >= 0 && m_selCol >= 0)
     {
-        const QPoint p = pt(m_selRow, m_selCol);
+        const QPointF p = cellPoint(m_selRow, m_selCol);
         painter.setPen(QPen(QColor(230, 40, 40), 3));
         painter.setBrush(Qt::NoBrush);
         painter.drawEllipse(p, 26, 26);
@@ -99,7 +98,7 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
     // 最后一手标记
     if (m_lastRow >= 0 && m_lastCol >= 0)
     {
-        const QPoint p = pt(m_lastRow, m_lastCol);
+        const QPointF p = cellPoint(m_lastRow, m_lastCol);
         painter.setPen(Qt::NoPen);
         painter.setBrush(QColor(230, 40, 40));
         painter.drawEllipse(p, 4, 4);
@@ -118,19 +117,19 @@ void XiangqiBoard::drawBoard(QPainter& painter)
     // 横线 10 条
     for (int r = 0; r < XiangqiChess::kRows; r++)
     {
-        painter.drawLine(pt(r, 0), pt(r, XiangqiChess::kCols - 1));
+        painter.drawLine(cellPoint(r, 0), cellPoint(r, XiangqiChess::kCols - 1));
     }
     // 竖线 9 条（中间行断开为楚河汉界）
     for (int c = 0; c < XiangqiChess::kCols; c++)
     {
-        painter.drawLine(pt(0, c), pt(4, c));
-        painter.drawLine(pt(5, c), pt(XiangqiChess::kRows - 1, c));
+        painter.drawLine(cellPoint(0, c), cellPoint(4, c));
+        painter.drawLine(cellPoint(5, c), cellPoint(XiangqiChess::kRows - 1, c));
     }
     // 九宫斜线（红：7-9 行；黑：0-2 行）
-    painter.drawLine(pt(7, 3), pt(9, 5));
-    painter.drawLine(pt(7, 5), pt(9, 3));
-    painter.drawLine(pt(0, 3), pt(2, 5));
-    painter.drawLine(pt(0, 5), pt(2, 3));
+    painter.drawLine(cellPoint(7, 3), cellPoint(9, 5));
+    painter.drawLine(cellPoint(7, 5), cellPoint(9, 3));
+    painter.drawLine(cellPoint(0, 3), cellPoint(2, 5));
+    painter.drawLine(cellPoint(0, 5), cellPoint(2, 3));
 
     // 楚河汉界
     painter.setRenderHint(QPainter::Antialiasing, true);
@@ -139,15 +138,18 @@ void XiangqiBoard::drawBoard(QPainter& painter)
     f.setBold(true);
     painter.setFont(f);
     painter.setPen(text);
-    painter.drawText(QRect(pt(0, 0).x(), pt(4, 0).y(), kCell * 4, kCell),
+    const QPointF p0 = cellPoint(0, 0);
+    const QPointF p4 = cellPoint(4, 0);
+    const QPointF p5 = cellPoint(5, 0);
+    painter.drawText(QRectF(p0.x(), p4.y(), kCell * 4, kCell),
                      Qt::AlignCenter, QStringLiteral("楚　河"));
-    painter.drawText(QRect(pt(0, 5).x(), pt(5, 0).y() + 0, kCell * 4, kCell),
+    painter.drawText(QRectF(p0.x(), p5.y(), kCell * 4, kCell),
                      Qt::AlignCenter, QStringLiteral("汉　界"));
 }
 
 void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
 {
-    const QPoint p = pt(row, col);
+    const QPointF p = cellPoint(row, col);
     const bool red = XiangqiChess::pieceBelongs(piece, true);
 
     painter.setRenderHint(QPainter::Antialiasing, true);
@@ -162,7 +164,7 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
     f.setBold(true);
     painter.setFont(f);
     painter.setPen(red ? QColor(170, 30, 20) : QColor(40, 40, 40));
-    painter.drawText(QRect(p.x() - 25, p.y() - 25, 50, 50), Qt::AlignCenter,
+    painter.drawText(QRectF(p.x() - 25, p.y() - 25, 50, 50), Qt::AlignCenter,
                      QString::fromUtf8(XiangqiChess::pieceName(piece)));
 }
 
@@ -173,12 +175,29 @@ void XiangqiBoard::mousePressEvent(QMouseEvent* event)
         return;
     }
     const float scale = qMin(width(), height()) / static_cast<float>(kLogicSize);
-    const int logicX = static_cast<int>(event->pos().x() / scale);
-    const int logicY = static_cast<int>(event->pos().y() / scale);
-    const int col = (logicX - kMargin + kCell / 2) / kCell;
-    const int row = (logicY - kMargin + kCell / 2) / kCell;
-    if (row >= 0 && row < XiangqiChess::kRows && col >= 0 && col < XiangqiChess::kCols)
+    const QPointF logic(event->pos().x() / scale, event->pos().y() / scale);
+
+    // 找最近的交叉点（图片网格按图校准，可能非均匀）
+    int bestRow = -1, bestCol = -1;
+    float bestDist = 1e9f;
+    for (int r = 0; r < XiangqiChess::kRows; r++)
     {
-        emit cellClicked(row, col);
+        for (int c = 0; c < XiangqiChess::kCols; c++)
+        {
+            const QPointF p = cellPoint(r, c);
+            const float dx = p.x() - logic.x();
+            const float dy = p.y() - logic.y();
+            const float d = dx * dx + dy * dy;
+            if (d < bestDist)
+            {
+                bestDist = d;
+                bestRow = r;
+                bestCol = c;
+            }
+        }
+    }
+    if (bestRow >= 0 && bestDist < 30 * 30)
+    {
+        emit cellClicked(bestRow, bestCol);
     }
 }

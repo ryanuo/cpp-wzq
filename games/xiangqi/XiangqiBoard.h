@@ -32,6 +32,14 @@ public:
     static constexpr int kMargin = 30;
     static constexpr int kCell = 60;
 
+    // 图片底图（512×512 用户棋盘图）的网格交叉点像素坐标（按图校准，4 款通用）
+    // 竖线 x = kImgX0 + col*kImgCellX；横线 y = kImgY0 + row*kImgCellY
+    static constexpr int kImgX0 = 68;
+    static constexpr int kImgCellX = 47;
+    static constexpr int kImgY0 = 64;
+    static constexpr int kImgCellY = 43;
+    static constexpr int kImgSize = 512;
+
 signals:
     void cellClicked(int row, int col);
 
@@ -40,7 +48,8 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
 
 private:
-    void drawBoard(QPainter& painter);   // 网格/九宫/楚河汉界
+    QPointF cellPoint(int row, int col) const;  // 交叉点坐标（逻辑 600 系）
+    void drawBoard(QPainter& painter);   // 程序绘制模式的网格/九宫/楚河汉界（图片模式不画）
     void drawPiece(QPainter& painter, int row, int col, int piece);
 
     XiangqiChess* m_chess = nullptr;
