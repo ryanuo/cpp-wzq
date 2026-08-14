@@ -39,7 +39,9 @@ int main()
     CHECK(xq.pieceAt(9, 4) == PIECE_RED_GENERAL, "红帅在底线中央");
     CHECK(xq.pieceAt(0, 4) == PIECE_BLACK_GENERAL, "黑将在底线中央");
     CHECK(xq.pieceAt(9, 0) == PIECE_RED_ROOK && xq.pieceAt(0, 8) == PIECE_BLACK_ROOK, "車位");
-    CHECK(xq.pieceAt(8, 1) == PIECE_RED_CANNON && xq.pieceAt(7, 0) == PIECE_RED_PAWN, "炮/兵位");
+    CHECK(xq.pieceAt(7, 1) == PIECE_RED_CANNON && xq.pieceAt(6, 0) == PIECE_RED_PAWN, "红炮(row7)/红兵(row6)");
+    CHECK(xq.pieceAt(2, 1) == PIECE_BLACK_CANNON && xq.pieceAt(3, 0) == PIECE_BLACK_PAWN, "黑炮(row2)/黑卒(row3)");
+    CHECK(xq.pieceAt(1, 0) == PIECE_NONE && xq.pieceAt(8, 0) == PIECE_NONE, "底线与炮之间空行");
     CHECK(xq.isRedTurn(), "红方先手");
     CHECK(xq.moveCount() == 0, "初始 0 步");
     CHECK(xq.canSelect(9, 0), "红车可选中");
