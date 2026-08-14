@@ -54,7 +54,7 @@ major minor patch:
 	@:
 
 version-bump:
-	@kind=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | tr -d ' '); \
+	@kind=$$(echo "$(filter major minor patch,$(MAKECMDGOALS))" | tr -d ' '); \
 	test -n "$$kind" || kind=patch; \
 	case "$$kind" in \
 	  major) new=$$(echo "$(VERSION)" | awk -F. '{print $$1+1".0.0"}') ;; \
@@ -84,9 +84,11 @@ tag:
 	@git tag $(TAG) && git push origin $(TAG) && echo "已推送 tag: $(TAG)"
 
 # 一条龙发布: 递增版本 -> 提交 -> 推送 -> 打 tag -> 推送
+# 注意: $(VERSION) 是 make 解析时的旧值, 新版本必须在 recipe 内重新提取
 release: version-bump
-	@git add CMakeLists.txt; \
-	git commit -m "chore: 升级版本 $(TAG)"; \
+	@newv=$$(grep '^project' CMakeLists.txt | grep -oE 'VERSION [0-9.]+' | head -1 | cut -d' ' -f2); \
+	git add CMakeLists.txt; \
+	git commit -m "chore: 升级版本 v$$newv"; \
 	git push origin main; \
-	git tag $(TAG) && git push origin $(TAG); \
-	echo "发布完成: $(TAG) (CI 构建中, 完成后可在 Releases 下载)"
+	git tag "v$$newv" && git push origin "v$$newv"; \
+	echo "发布完成: v$$newv (CI 构建中, 完成后可在 Releases 下载)"
