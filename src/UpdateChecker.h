@@ -42,7 +42,17 @@ private slots:
     void onDownloadFinished();
 
 private:
+    // 按镜像序号尝试检查更新 / 下载（返回是否还有下一个可尝试）
+    bool tryCheckNextMirror(int index);
+    void tryDownloadWithMirror(int index);
+    // 镜像前缀 + 原始 URL（index=0 为官方直连，不加前缀）
+    static QString mirrorUrl(int index, const QString& rawUrl);
+
     QNetworkAccessManager* m_nam = nullptr;
     QString m_downloadTarget;   // 当前下载的临时文件路径
     QString m_downloadDestDir;  // 下载目标目录
+    QString m_downloadRawUrl;   // 原始下载 URL（未加镜像前缀）
+    int m_checkTried = 0;       // 检查更新已尝试的镜像数
+    int m_mirrorIndex = 0;      // 最近一次成功的镜像（检查成功后记录，下载沿用）
+    int m_downloadTried = 0;    // 下载已尝试的镜像数
 };
