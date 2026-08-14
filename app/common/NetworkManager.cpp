@@ -356,15 +356,30 @@ void NetworkManager::handleLine(const QByteArray& line)
             m_tcp->disconnectFromHost();
         }
     }
-    else if (parts[0] == "MOVE" && parts.size() == 3 && m_connected)
+    else if (parts[0] == "MOVE" && m_connected)
     {
-        bool okRow = false;
-        bool okCol = false;
-        const int row = parts[1].toInt(&okRow);
-        const int col = parts[2].toInt(&okCol);
-        if (okRow && okCol)
+        // 五子棋: MOVE <row> <col>；象棋: MOVE <fr> <fc> <tr> <tc>
+        if (parts.size() == 5)
         {
-            emit moveReceived(row, col);
+            bool ok = false;
+            const int fr = parts[1].toInt(&ok);
+            const int fc = ok ? parts[2].toInt(&ok) : 0;
+            const int tr = ok ? parts[3].toInt(&ok) : 0;
+            const int tc = ok ? parts[4].toInt(&ok) : 0;
+            if (ok)
+            {
+                emit moveFromToReceived(fr, fc, tr, tc);
+            }
+        }
+        else if (parts.size() == 3)
+        {
+            bool ok = false;
+            const int row = parts[1].toInt(&ok);
+            const int col = ok ? parts[2].toInt(&ok) : 0;
+            if (ok)
+            {
+                emit moveReceived(row, col);
+            }
         }
     }
     else if (parts[0] == "RESTART_REQ" && m_connected)
@@ -432,6 +447,15 @@ void NetworkManager::sendMove(int row, int col)
     if (m_connected)
     {
         sendLine("MOVE " + QByteArray::number(row) + " " + QByteArray::number(col));
+    }
+}
+
+void NetworkManager::sendMoveFromTo(int fr, int fc, int tr, int tc)
+{
+    if (m_connected)
+    {
+        sendLine("MOVE " + QByteArray::number(fr) + " " + QByteArray::number(fc) + " "
+                 + QByteArray::number(tr) + " " + QByteArray::number(tc));
     }
 }
 

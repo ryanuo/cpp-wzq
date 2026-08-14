@@ -1,34 +1,34 @@
-#include "BoardWidget.h"
+#include "GomokuBoard.h"
 
 #include <QMouseEvent>
 #include <QPainter>
 
-BoardWidget::BoardWidget(QWidget* parent)
+GomokuBoard::GomokuBoard(QWidget* parent)
     : QWidget(parent)
 {
     // 可缩放：初始 600x600，允许拉大/拉小（等比）
     setMinimumSize(400, 400);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    // 资源来自 resources.qrc（原 EasyX 的 loadimage 改为 Qt 资源），默认翡翠绿棋盘
+    // 资源来自 resource.qrc（原 EasyX 的 loadimage 改为 Qt 资源），默认翡翠绿棋盘
     setBackground(QStringLiteral(":/res/board_2_mint.png"));
     m_blackPiece = QPixmap(QStringLiteral(":/res/black.png"));
     m_whitePiece = QPixmap(QStringLiteral(":/res/white.png"));
 }
 
-void BoardWidget::setBackground(const QString& imagePath)
+void GomokuBoard::setBackground(const QString& imagePath)
 {
     m_boardBg = QPixmap(imagePath);
     update();
 }
 
-float BoardWidget::scaleFactor() const
+float GomokuBoard::scaleFactor() const
 {
     const float s = qMin(width(), height()) / static_cast<float>(kLogicSize);
     return qMax(0.1f, s);
 }
 
-void BoardWidget::paintEvent(QPaintEvent* /*event*/)
+void GomokuBoard::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
     const float scale = scaleFactor();
@@ -88,7 +88,7 @@ void BoardWidget::paintEvent(QPaintEvent* /*event*/)
     }
 }
 
-void BoardWidget::mousePressEvent(QMouseEvent* event)
+void GomokuBoard::mousePressEvent(QMouseEvent* event)
 {
     if (!m_chess || event->button() != Qt::LeftButton)
     {

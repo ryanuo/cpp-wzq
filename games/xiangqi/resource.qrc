@@ -1,0 +1,9 @@
+<RCC>
+    <!-- 象棋资源：4 款棋盘底图（用户提供）+ 预留棋子图 -->
+    <qresource prefix="/res">
+        <file alias="board_xq_paper.png">res/board_xq_paper.png</file>
+        <file alias="board_xq_jade.png">res/board_xq_jade.png</file>
+        <file alias="board_xq_pink.png">res/board_xq_pink.png</file>
+        <file alias="board_xq_redwood.png">res/board_xq_redwood.png</file>
+    </qresource>
+</RCC>

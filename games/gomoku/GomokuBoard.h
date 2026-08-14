@@ -4,18 +4,18 @@
 #include <QString>
 #include <QWidget>
 
-#include "Chess.h"
+#include "GomokuChess.h"
 
 // 棋盘绘制组件：底图 + 黑白棋子，鼠标点击换算格点
 // 支持等比缩放（窗口拉大时棋盘跟随放大）与换肤（自定义背景图）
-class BoardWidget : public QWidget
+class GomokuBoard : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit BoardWidget(QWidget* parent = nullptr);
+    explicit GomokuBoard(QWidget* parent = nullptr);
 
-    void setChess(Chess* chess) { m_chess = chess; }
+    void setChess(GomokuChess* chess) { m_chess = chess; }
     void repaintBoard() { update(); }
 
     // 最后一手高亮（红点标记），落子后调用；悔棋/重开用 clearLastMove 清除
@@ -49,7 +49,7 @@ private:
     // 当前缩放系数 = min(宽,高)/600，绘制与鼠标换算共用
     float scaleFactor() const;
 
-    Chess* m_chess = nullptr;
+    GomokuChess* m_chess = nullptr;
     QPixmap m_boardBg;
     QPixmap m_blackPiece;
     QPixmap m_whitePiece;

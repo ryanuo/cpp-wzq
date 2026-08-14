@@ -10,7 +10,7 @@
 
 #include <cstdio>
 
-#include "../src/NetworkManager.h"
+#include "../app/common/NetworkManager.h"
 
 namespace {
 

@@ -1,7 +1,7 @@
-// Chess 模型单元测试（悔棋/回合/落子），headless，无 Qt 依赖
+// GomokuChess 模型单元测试（悔棋/回合/落子），headless，无 Qt 依赖
 #include <cstdio>
 
-#include "Chess.h"
+#include "GomokuChess.h"
 
 static int g_failures = 0;
 
@@ -15,7 +15,7 @@ static int g_failures = 0;
 
 int main()
 {
-    Chess chess(13, 29, 29, 45);
+    GomokuChess chess(13, 29, 29, 45);
     chess.init();
 
     // 空盘：无子可悔

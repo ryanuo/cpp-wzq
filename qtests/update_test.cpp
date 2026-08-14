@@ -2,7 +2,7 @@
 #include <QCoreApplication>
 #include <cstdio>
 
-#include "UpdateChecker.h"
+#include "../common/UpdateChecker.h"
 
 static int g_failures = 0;
 

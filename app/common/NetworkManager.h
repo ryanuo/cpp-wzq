@@ -39,6 +39,7 @@ public:
     QHostAddress peerAddress() const { return m_peerIp; }
 
     void sendMove(int row, int col);
+    void sendMoveFromTo(int fr, int fc, int tr, int tc);  // 象棋：起止格走子
     void sendRestartRequest();     // 请求再来一局（需对方同意）
     void sendRestartReply(bool accept);
     void sendUndo();       // 发送悔棋请求（对方确认后双方撤回最后一手）
@@ -50,6 +51,7 @@ signals:
     void connected(bool isHost);      // 配对成功；isHost=true 执黑先手
     void searchFailed(const QString& reason);  // 配对失败/中断（UI 应恢复可重试）
     void moveReceived(int row, int col);
+    void moveFromToReceived(int fr, int fc, int tr, int tc);  // 象棋走子（起止格）
     void restartRequested();      // 对方请求再来一局
     void restartAccepted();       // 对方同意重开（双方重置棋盘）
     void restartRejected();       // 对方拒绝重开

@@ -1,0 +1,11 @@
+<RCC>
+    <!-- 五子棋资源：棋盘皮肤 + 棋子贴图（board_*.png 已启用） -->
+    <qresource prefix="/res">
+        <file alias="board_1_cream.png">res/board_1_cream.png</file>
+        <file alias="board_2_mint.png">res/board_2_mint.png</file>
+        <file alias="board_3_peach.png">res/board_3_peach.png</file>
+        <file alias="board_4_wood.png">res/board_4_wood.png</file>
+        <file alias="black.png">res/black.png</file>
+        <file alias="white.png">res/white.png</file>
+    </qresource>
+</RCC>

@@ -11,25 +11,48 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network Multimedia)
 qt_standard_project_setup()
 
-add_executable(gobang
-    src/main.cpp
-    src/MainWindow.cpp
-    src/MainWindow.h
-    src/BoardWidget.cpp
-    src/BoardWidget.h
-    src/NetworkManager.cpp
-    src/NetworkManager.h
-    src/UpdateChecker.cpp
-    src/UpdateChecker.h
-    src/Chess.cpp
-    src/Chess.h
-    resources.qrc
+# ============================================================
+# 公共库（两个游戏共享：联机 / OTA / 游戏窗口基类 / 公共类型）
+# ============================================================
+add_library(gobang_common STATIC
+    app/common/GameWindow.cpp
+    app/common/GameWindow.h
+    app/common/NetworkManager.cpp
+    app/common/NetworkManager.h
+    app/common/UpdateChecker.cpp
+    app/common/UpdateChecker.h
+    app/common/ChessTypes.h
 )
+target_link_libraries(gobang_common PUBLIC Qt6::Widgets Qt6::Network Qt6::Multimedia)
+target_include_directories(gobang_common PUBLIC app/common)
 
-target_link_libraries(gobang PRIVATE Qt6::Widgets Qt6::Network Qt6::Multimedia)
+# ============================================================
+# 主程序：游戏选择首页 + 五子棋 + 象棋
+# ============================================================
+add_executable(gobang
+    app/main.cpp
+    app/launcher/GameLauncher.cpp
+    app/launcher/GameLauncher.h
+    games/gomoku/GomokuWindow.cpp
+    games/gomoku/GomokuWindow.h
+    games/gomoku/GomokuBoard.cpp
+    games/gomoku/GomokuBoard.h
+    games/gomoku/GomokuChess.cpp
+    games/gomoku/GomokuChess.h
+    games/xiangqi/XiangqiWindow.cpp
+    games/xiangqi/XiangqiWindow.h
+    games/xiangqi/XiangqiBoard.cpp
+    games/xiangqi/XiangqiBoard.h
+    games/xiangqi/XiangqiChess.cpp
+    games/xiangqi/XiangqiChess.h
+    app/common/resource.qrc
+    games/gomoku/resource.qrc
+    games/xiangqi/resource.qrc
+)
+target_link_libraries(gobang PRIVATE gobang_common)
 
 # 版本号注入（OTA 更新对比用）
-target_compile_definitions(gobang PRIVATE GOMOKU_APP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(gobang PRIVATE GOBANG_APP_VERSION="${PROJECT_VERSION}")
 
 # macOS 打包为 .app bundle（macdeployqt 需要）；Windows 隐藏控制台窗口
 set_target_properties(gobang PROPERTIES
@@ -37,37 +60,45 @@ set_target_properties(gobang PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+# ============================================================
+# 测试
+# ============================================================
 enable_testing()
 
+# 联机协议（公共）
 add_executable(gobang_net_test
     qtests/net_test.cpp
-    src/NetworkManager.cpp
-    src/NetworkManager.h
+    app/common/NetworkManager.cpp
+    app/common/NetworkManager.h
 )
-
 target_link_libraries(gobang_net_test PRIVATE Qt6::Network)
-
+target_include_directories(gobang_net_test PRIVATE app/common)
 add_test(NAME net_test COMMAND gobang_net_test)
 
-add_executable(gobang_chess_test
-    qtests/chess_test.cpp
-    src/Chess.cpp
-    src/Chess.h
+# 五子棋规则
+add_executable(gobang_gomoku_test
+    qtests/gomoku_test.cpp
+    games/gomoku/GomokuChess.cpp
+    games/gomoku/GomokuChess.h
 )
+target_include_directories(gobang_gomoku_test PRIVATE games/gomoku app/common)
+add_test(NAME gomoku_test COMMAND gobang_gomoku_test)
 
-target_include_directories(gobang_chess_test PRIVATE src)
+# 象棋规则
+add_executable(gobang_xiangqi_test
+    qtests/xiangqi_test.cpp
+    games/xiangqi/XiangqiChess.cpp
+    games/xiangqi/XiangqiChess.h
+)
+target_include_directories(gobang_xiangqi_test PRIVATE games/xiangqi app/common)
+add_test(NAME xiangqi_test COMMAND gobang_xiangqi_test)
 
-add_test(NAME chess_test COMMAND gobang_chess_test)
-
-# OTA 更新逻辑单测（版本比较 / 资产匹配）
+# OTA（公共）
 add_executable(gobang_update_test
     qtests/update_test.cpp
-    src/UpdateChecker.cpp
-    src/UpdateChecker.h
+    app/common/UpdateChecker.cpp
+    app/common/UpdateChecker.h
 )
-
 target_link_libraries(gobang_update_test PRIVATE Qt6::Network)
-
-target_include_directories(gobang_update_test PRIVATE src)
-
+target_include_directories(gobang_update_test PRIVATE app/common)
 add_test(NAME update_test COMMAND gobang_update_test)

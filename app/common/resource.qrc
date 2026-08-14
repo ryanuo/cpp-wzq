@@ -1,0 +1,11 @@
+<RCC>
+    <!-- 公共资源（两个游戏共享的音效）。alias 必须显式: <file>res/x</file>
+         默认资源路径是 res/x, 加前缀 /res 会叠成 :/res/res/x -->
+    <qresource prefix="/res">
+        <file alias="start.wav">res/start.wav</file>
+        <file alias="down.wav">res/down.wav</file>
+        <file alias="bg.mp3">res/bg.mp3</file>
+        <file alias="win.mp3">res/win.mp3</file>
+        <file alias="lose.mp3">res/lose.mp3</file>
+    </qresource>
+</RCC>

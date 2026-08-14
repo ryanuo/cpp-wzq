@@ -1,8 +1,8 @@
-#include "Chess.h"
+#include "GomokuChess.h"
 
 #include <cmath>
 
-Chess::Chess(int gradeSize, int marginX, int marginY, float chessSize)
+GomokuChess::GomokuChess(int gradeSize, int marginX, int marginY, float chessSize)
 {
     this->gradeSize = gradeSize;
     this->margin_x = marginX;
@@ -21,7 +21,7 @@ Chess::Chess(int gradeSize, int marginX, int marginY, float chessSize)
     }
 }
 
-void Chess::init()
+void GomokuChess::init()
 {
     for (int i = 0; i < gradeSize; i++)
     {
@@ -34,7 +34,7 @@ void Chess::init()
     playerFlag = true; // 黑方先行
 }
 
-bool Chess::clickBoard(int x, int y, ChessPos* pos)
+bool GomokuChess::clickBoard(int x, int y, ChessPos* pos)
 {
     int col = (x - margin_x) / chessSize;
     int row = (y - margin_y) / chessSize;
@@ -107,7 +107,7 @@ bool Chess::clickBoard(int x, int y, ChessPos* pos)
     return ret;
 }
 
-void Chess::chessDown(ChessPos* pos, chess_kind_t kind)
+void GomokuChess::chessDown(ChessPos* pos, chess_kind_t kind)
 {
     lastPos = *pos;
     chessMap[pos->row][pos->col] = kind;
@@ -116,7 +116,7 @@ void Chess::chessDown(ChessPos* pos, chess_kind_t kind)
     moveHistory.push_back({pos->row, pos->col, kind});
 }
 
-bool Chess::undoLast()
+bool GomokuChess::undoLast()
 {
     if (moveHistory.empty())
     {
@@ -133,17 +133,17 @@ bool Chess::undoLast()
     return true;
 }
 
-int Chess::getChessData(int row, int col) const
+int GomokuChess::getChessData(int row, int col) const
 {
     return chessMap[row][col];
 }
 
-bool Chess::checkOver()
+bool GomokuChess::checkOver()
 {
     return checkWin();
 }
 
-bool Chess::checkWin()
+bool GomokuChess::checkWin()
 {
     int row = lastPos.row;
     int col = lastPos.col;

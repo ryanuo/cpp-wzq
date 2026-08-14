@@ -2,23 +2,13 @@
 
 #include <vector>
 
-enum chess_kind_t {
-    CHESS_WHITE = -1,
-    CHESS_BLACK = 1
-};
-
-struct ChessPos {
-    int row;
-    int col;
-
-    ChessPos(int r = 0, int c = 0) : row(r), col(c) {}
-};
+#include "../common/ChessTypes.h"
 
 // 纯棋盘模型（原 EasyX 版剥离绘图/音效后保留）
-class Chess
+class GomokuChess
 {
 public:
-    Chess(int gradeSize, int marginX, int marginY, float chessSize);
+    GomokuChess(int gradeSize, int marginX, int marginY, float chessSize);
 
     void init();                                          // 清空棋盘，黑方先行
     bool clickBoard(int x, int y, ChessPos* pos);         // 像素坐标 -> 格点（含越界/占用校验）

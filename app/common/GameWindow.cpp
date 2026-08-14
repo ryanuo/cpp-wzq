@@ -1,11 +1,10 @@
-#include "MainWindow.h"
+#include "GameWindow.h"
 
 #include <QAction>
 #include <QAudioOutput>
 #include <QCloseEvent>
 #include <QDir>
 #include <QFileDialog>
-#include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
@@ -21,32 +20,15 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 
-#include "BoardWidget.h"
 #include "NetworkManager.h"
 #include "UpdateChecker.h"
 
-namespace {
-
-// 19×19 棋盘（新棋盘底图实测：上边距68 左边距72 格距25.3，600×600）
-const int kGradeSize = 19;
-const int kMarginX = 72;
-const int kMarginY = 68;
-const float kChessSize = 25.3f;
-
-} // namespace
-
-MainWindow::MainWindow(QWidget* parent)
+GameWindow::GameWindow(const QString& title, QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(QStringLiteral("五子棋 · 局域网对战"));
+    setWindowTitle(title);
 
-    // 棋盘模型 + 绘制组件
-    m_chess = new Chess(kGradeSize, kMarginX, kMarginY, kChessSize);
-    m_board = new BoardWidget(this);
-    m_board->setChess(m_chess);
-    connect(m_board, &BoardWidget::cellClicked, this, &MainWindow::onCellClicked);
-
-    // 菜单栏操作（macOS 集成到屏幕顶部系统菜单栏；Windows/Linux 显示在窗口顶部）
+    // 菜单栏操作（macOS 集成到屏幕顶部系统菜单栏；按类型分菜单）
     m_connectAct = new QAction(QStringLiteral("联机对战"), this);
     m_newGameAct = new QAction(QStringLiteral("新游戏"), this);
     m_undoAct = new QAction(QStringLiteral("悔棋"), this);
@@ -56,13 +38,12 @@ MainWindow::MainWindow(QWidget* parent)
     m_undoAct->setEnabled(false);
     m_surrenderAct->setEnabled(false);
     m_disconnectAct->setEnabled(false);
-    connect(m_connectAct, &QAction::triggered, this, &MainWindow::onConnectClicked);
-    connect(m_newGameAct, &QAction::triggered, this, &MainWindow::onNewGameClicked);
-    connect(m_undoAct, &QAction::triggered, this, &MainWindow::onUndoClicked);
-    connect(m_surrenderAct, &QAction::triggered, this, &MainWindow::onSurrenderClicked);
-    connect(m_disconnectAct, &QAction::triggered, this, &MainWindow::onDisconnectClicked);
+    connect(m_connectAct, &QAction::triggered, this, &GameWindow::onConnectClicked);
+    connect(m_newGameAct, &QAction::triggered, this, &GameWindow::onNewGameClicked);
+    connect(m_undoAct, &QAction::triggered, this, &GameWindow::onUndoClicked);
+    connect(m_surrenderAct, &QAction::triggered, this, &GameWindow::onSurrenderClicked);
+    connect(m_disconnectAct, &QAction::triggered, this, &GameWindow::onDisconnectClicked);
 
-    // 菜单栏（macOS 上集成到屏幕顶部系统菜单栏；按类型分菜单，不堆在应用菜单里）
     QMenu* gameMenu = menuBar()->addMenu(QStringLiteral("游戏"));
     gameMenu->addAction(m_connectAct);
     gameMenu->addAction(m_newGameAct);
@@ -71,30 +52,20 @@ MainWindow::MainWindow(QWidget* parent)
     gameMenu->addSeparator();
     gameMenu->addAction(m_disconnectAct);
 
-    // 「皮肤」菜单（内置 4 款棋盘 + 从图片选择）
-    QMenu* skinMenu = menuBar()->addMenu(QStringLiteral("皮肤"));
-    skinMenu->addAction(QStringLiteral("米白色棋盘"), this,
-                        [this] { applySkin(QStringLiteral(":/res/board_1_cream.png")); });
-    skinMenu->addAction(QStringLiteral("翡翠绿棋盘"), this,
-                        [this] { applySkin(QStringLiteral(":/res/board_2_mint.png")); });
-    skinMenu->addAction(QStringLiteral("浅橙色棋盘"), this,
-                        [this] { applySkin(QStringLiteral(":/res/board_3_peach.png")); });
-    skinMenu->addAction(QStringLiteral("木质棋盘"), this,
-                        [this] { applySkin(QStringLiteral(":/res/board_4_wood.png")); });
-    skinMenu->addSeparator();
-    skinMenu->addAction(QStringLiteral("从图片选择…"), this, [this] { chooseSkinFile(); });
-    m_skinAct = skinMenu->menuAction();
+    // 「皮肤」菜单（由子类 fillSkinMenu 填充）
+    m_skinMenu = menuBar()->addMenu(QStringLiteral("皮肤"));
+    m_skinAct = m_skinMenu->menuAction();
 
     // 「帮助」菜单：检查更新（OTA）
     m_updateAct = new QAction(QStringLiteral("检查更新"), this);
-    connect(m_updateAct, &QAction::triggered, this, &MainWindow::onCheckUpdateClicked);
+    connect(m_updateAct, &QAction::triggered, this, &GameWindow::onCheckUpdateClicked);
     QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("帮助"));
     helpMenu->addAction(m_updateAct);
 
+    // central 布局（子类把棋盘 addWidget 进来）
     auto* central = new QWidget(this);
-    auto* layout = new QVBoxLayout(central);
-    layout->addWidget(m_board);  // 拉伸填满，窗口缩放时棋盘等比跟随
-    layout->setContentsMargins(8, 8, 8, 8);
+    m_centralLayout = new QVBoxLayout(central);
+    m_centralLayout->setContentsMargins(8, 8, 8, 8);
     setCentralWidget(central);
 
     statusBar()->showMessage(QStringLiteral("未连接 · 点击「联机对战」输入密码配对"));
@@ -104,36 +75,6 @@ MainWindow::MainWindow(QWidget* parent)
     m_turnLabel->setVisible(false);
     statusBar()->addPermanentWidget(m_turnLabel);
     updateTurnHint();
-
-    // 联机
-    m_network = new NetworkManager(this);
-    connect(m_network, &NetworkManager::statusChanged, this, &MainWindow::onStatusChanged);
-    connect(m_network, &NetworkManager::connected, this, &MainWindow::onConnected);
-    connect(m_network, &NetworkManager::searchFailed, this, &MainWindow::onSearchFailed);
-    connect(m_network, &NetworkManager::moveReceived, this, &MainWindow::onMoveReceived);
-    connect(m_network, &NetworkManager::restartRequested, this, &MainWindow::onRestartRequested);
-    connect(m_network, &NetworkManager::restartAccepted, this, &MainWindow::onRestartAccepted);
-    connect(m_network, &NetworkManager::restartRejected, this, &MainWindow::onRestartRejected);
-    connect(m_network, &NetworkManager::undoRequested, this, &MainWindow::onUndoRequested);
-    connect(m_network, &NetworkManager::undoAccepted, this, &MainWindow::onUndoAccepted);
-    connect(m_network, &NetworkManager::undoRejected, this, &MainWindow::onUndoRejected);
-    connect(m_network, &NetworkManager::surrendered, this, &MainWindow::onSurrendered);
-    connect(m_network, &NetworkManager::disconnected, this, &MainWindow::onDisconnected);
-
-    // OTA 更新
-    m_updater = new UpdateChecker(this);
-    connect(m_updater, &UpdateChecker::updateAvailable, this, &MainWindow::onUpdateAvailable);
-    connect(m_updater, &UpdateChecker::upToDate, this, &MainWindow::onUpToDate);
-    connect(m_updater, &UpdateChecker::checkFailed, this, &MainWindow::onCheckFailed);
-    connect(m_updater, &UpdateChecker::downloadProgress, this, &MainWindow::onDownloadProgress);
-    connect(m_updater, &UpdateChecker::downloadFinished, this, &MainWindow::onDownloadFinished);
-    connect(m_updater, &UpdateChecker::downloadFailed, this, &MainWindow::onDownloadFailed);
-
-    // 恢复上次换肤（默认翡翠绿棋盘）
-    QSettings settings;
-    const QString skin = settings.value(QStringLiteral("skin"),
-                                        QStringLiteral(":/res/board_2_mint.png")).toString();
-    m_board->setBackground(skin);
 
     // 音效：WAV 用 QSoundEffect，MP3 用 QMediaPlayer
     m_startSound = new QSoundEffect(this);
@@ -153,13 +94,38 @@ MainWindow::MainWindow(QWidget* parent)
     m_sfxAudio->setVolume(0.8f);
     m_sfxPlayer->setAudioOutput(m_sfxAudio);
 
-    // 窗口尺寸紧凑：无按钮行后高度只需 棋盘(624) + 边距 + 状态栏
+    // 联机
+    m_network = new NetworkManager(this);
+    connect(m_network, &NetworkManager::statusChanged, this, &GameWindow::onStatusChanged);
+    connect(m_network, &NetworkManager::connected, this, &GameWindow::onConnected);
+    connect(m_network, &NetworkManager::searchFailed, this, &GameWindow::onSearchFailed);
+    connect(m_network, &NetworkManager::moveReceived, this, &GameWindow::onMoveReceived);
+    connect(m_network, &NetworkManager::moveFromToReceived, this, &GameWindow::onMoveFromToReceived);
+    connect(m_network, &NetworkManager::restartRequested, this, &GameWindow::onRestartRequested);
+    connect(m_network, &NetworkManager::restartAccepted, this, &GameWindow::onRestartAccepted);
+    connect(m_network, &NetworkManager::restartRejected, this, &GameWindow::onRestartRejected);
+    connect(m_network, &NetworkManager::undoRequested, this, &GameWindow::onUndoRequested);
+    connect(m_network, &NetworkManager::undoAccepted, this, &GameWindow::onUndoAccepted);
+    connect(m_network, &NetworkManager::undoRejected, this, &GameWindow::onUndoRejected);
+    connect(m_network, &NetworkManager::surrendered, this, &GameWindow::onSurrendered);
+    connect(m_network, &NetworkManager::disconnected, this, &GameWindow::onDisconnected);
+
+    // OTA 更新
+    m_updater = new UpdateChecker(this);
+    connect(m_updater, &UpdateChecker::updateAvailable, this, &GameWindow::onUpdateAvailable);
+    connect(m_updater, &UpdateChecker::upToDate, this, &GameWindow::onUpToDate);
+    connect(m_updater, &UpdateChecker::checkFailed, this, &GameWindow::onCheckFailed);
+    connect(m_updater, &UpdateChecker::downloadProgress, this, &GameWindow::onDownloadProgress);
+    connect(m_updater, &UpdateChecker::downloadFinished, this, &GameWindow::onDownloadFinished);
+    connect(m_updater, &UpdateChecker::downloadFailed, this, &GameWindow::onDownloadFailed);
+
+    // 窗口尺寸紧凑：棋盘(624) + 边距 + 状态栏
     resize(640, 675);
 }
 
-MainWindow::~MainWindow() = default;
+GameWindow::~GameWindow() = default;
 
-void MainWindow::startOnline(const QString& password)
+void GameWindow::startOnline(const QString& password)
 {
     const QString trimmed = password.trimmed();
     if (trimmed.isEmpty())
@@ -171,13 +137,13 @@ void MainWindow::startOnline(const QString& password)
     m_network->start(trimmed);
 }
 
-void MainWindow::closeEvent(QCloseEvent* event)
+void GameWindow::closeEvent(QCloseEvent* event)
 {
     m_network->stop();
     event->accept();
 }
 
-void MainWindow::onConnectClicked()
+void GameWindow::onConnectClicked()
 {
     bool ok = false;
     const QString password = QInputDialog::getText(
@@ -193,10 +159,10 @@ void MainWindow::onConnectClicked()
     }
 }
 
-void MainWindow::onNewGameClicked()
+void GameWindow::onNewGameClicked()
 {
     // 对局进行中（已落子且未分胜负）：点「新游戏」视为认输
-    if (m_connected && m_chess->moveCount() > 0 && !m_gameOver)
+    if (m_connected && moveCount() > 0 && !m_gameOver)
     {
         const auto reply = QMessageBox::question(
             this, QStringLiteral("新游戏"),
@@ -234,7 +200,7 @@ void MainWindow::onNewGameClicked()
     resetBoard();
 }
 
-void MainWindow::onDisconnectClicked()
+void GameWindow::onDisconnectClicked()
 {
     if (!m_connected)
     {
@@ -252,7 +218,7 @@ void MainWindow::onDisconnectClicked()
     }
 }
 
-void MainWindow::onSurrenderClicked()
+void GameWindow::onSurrenderClicked()
 {
     if (!m_connected || m_gameOver)
     {
@@ -272,7 +238,7 @@ void MainWindow::onSurrenderClicked()
     setStatus(QStringLiteral("你认输了"));
 }
 
-void MainWindow::onCellClicked(int row, int col)
+void GameWindow::onCellClicked(int row, int col)
 {
     if (!m_connected)
     {
@@ -285,25 +251,48 @@ void MainWindow::onCellClicked(int row, int col)
     }
     if (!myTurn())
     {
-        setStatus(QStringLiteral("等待对方落子…"));
+        setStatus(waitText());
         return;
     }
-    if (m_chess->getChessData(row, col) != 0)
+    if (!canPlace(row, col))
     {
-        return; // 已有棋子
+        return; // 已有棋子/非法落点
     }
 
-    ChessPos pos(row, col);
-    m_chess->chessDown(&pos, m_myKind);
-    m_board->repaintBoard();
-    m_board->setLastMove(row, col);
+    placePiece(row, col, m_myKind);
     m_downSound->play();
     m_network->sendMove(row, col);
     updateTurnHint();
     checkGameEnd(m_myKind);
 }
 
-void MainWindow::onConnected(bool isHost)
+void GameWindow::onMoveReceived(int row, int col)
+{
+    if (!m_connected || m_gameOver)
+    {
+        return;
+    }
+    if (!canPlace(row, col))
+    {
+        return; // 已占/非法
+    }
+
+    placePiece(row, col, opponentKind());
+    m_downSound->play();
+    updateTurnHint();
+    checkGameEnd(opponentKind());
+}
+
+void GameWindow::onMoveFromToReceived(int fr, int fc, int tr, int tc)
+{
+    Q_UNUSED(fr);
+    Q_UNUSED(fc);
+    Q_UNUSED(tr);
+    Q_UNUSED(tc);
+    // 五子棋不使用起止格走子；象棋子类覆盖
+}
+
+void GameWindow::onConnected(bool isHost)
 {
     m_connected = true;
     m_gameOver = false;
@@ -323,31 +312,11 @@ void MainWindow::onConnected(bool isHost)
     const QString peerIp = m_network->peerAddress().toString();
     setStatus(isHost ? QStringLiteral("已连接 · 你执黑（先手） · 对手 IP: ") + peerIp
                      : QStringLiteral("已连接 · 你执白（后手） · 对手 IP: ") + peerIp);
-    setWindowTitle(QStringLiteral("五子棋 · 局域网对战 - 对手 ") + peerIp);
+    setWindowTitle(windowTitle() + QStringLiteral(" - 对手 ") + peerIp);
     updateTurnHint();
 }
 
-void MainWindow::onMoveReceived(int row, int col)
-{
-    if (!m_connected || m_gameOver)
-    {
-        return;
-    }
-    if (m_chess->getChessData(row, col) != 0)
-    {
-        return; // 已占
-    }
-
-    ChessPos pos(row, col);
-    m_chess->chessDown(&pos, opponentKind());
-    m_board->repaintBoard();
-    m_board->setLastMove(row, col);
-    m_downSound->play();
-    updateTurnHint();
-    checkGameEnd(opponentKind());
-}
-
-void MainWindow::onRestartRequested()
+void GameWindow::onRestartRequested()
 {
     if (!m_connected)
     {
@@ -378,7 +347,7 @@ void MainWindow::onRestartRequested()
     }
 }
 
-void MainWindow::onRestartAccepted()
+void GameWindow::onRestartAccepted()
 {
     m_restartPending = false;
     resetBoard();
@@ -386,16 +355,16 @@ void MainWindow::onRestartAccepted()
     setStatus(QStringLiteral("对方同意重开 · 新的一局"));
 }
 
-void MainWindow::onRestartRejected()
+void GameWindow::onRestartRejected()
 {
     m_restartPending = false;
     setStatus(QStringLiteral("对方拒绝了重开请求"));
 }
 
-void MainWindow::onDisconnected()
+void GameWindow::onDisconnected()
 {
     // 对局中且非本地主动断开、且未弹过结果 → 对方认输（QUIT 或掉线）
-    const bool inGame = m_chess->moveCount() > 0;
+    const bool inGame = moveCount() > 0;
     const bool opponentLeft = inGame && !m_localDisconnect && !m_resultShown;
     m_connected = false;
     m_gameOver = false;
@@ -407,7 +376,7 @@ void MainWindow::onDisconnected()
     setConnectedUi(false);
     m_bgPlayer->stop();
     resetBoard();
-    setWindowTitle(QStringLiteral("五子棋 · 局域网对战"));
+    setWindowTitle(windowTitle());
 
     if (opponentLeft)
     {
@@ -419,14 +388,14 @@ void MainWindow::onDisconnected()
     updateTurnHint();
 }
 
-void MainWindow::onSearchFailed(const QString& reason)
+void GameWindow::onSearchFailed(const QString& reason)
 {
     // 配对失败/中断：恢复「联机对战」按钮，允许重新尝试
     setConnectedUi(false);
     setStatus(reason);
 }
 
-void MainWindow::onUndoClicked()
+void GameWindow::onUndoClicked()
 {
     if (!m_connected || m_gameOver)
     {
@@ -437,7 +406,7 @@ void MainWindow::onUndoClicked()
         setStatus(QStringLiteral("已发送悔棋请求，等待对方回复…"));
         return;
     }
-    if (m_chess->moveCount() == 0)
+    if (moveCount() == 0)
     {
         setStatus(QStringLiteral("还没有落子，无法悔棋"));
         return;
@@ -447,7 +416,7 @@ void MainWindow::onUndoClicked()
     setStatus(QStringLiteral("已发送悔棋请求，等待对方回复…"));
 }
 
-void MainWindow::onUndoRequested()
+void GameWindow::onUndoRequested()
 {
     if (!m_connected || m_gameOver)
     {
@@ -473,30 +442,36 @@ void MainWindow::onUndoRequested()
     }
 }
 
-void MainWindow::onUndoAccepted()
+void GameWindow::onUndoAccepted()
 {
     m_undoPending = false;
     doUndo();
     setStatus(QStringLiteral("对方同意悔棋"));
 }
 
-void MainWindow::onUndoRejected()
+void GameWindow::onUndoRejected()
 {
     m_undoPending = false;
     setStatus(QStringLiteral("对方拒绝了悔棋"));
 }
 
-void MainWindow::doUndo()
+void GameWindow::doUndo()
 {
-    if (m_chess->undoLast())
+    if (undoLastMove())
     {
-        m_board->repaintBoard();
-        m_board->clearLastMove();  // 悔棋后无最后一手标记
         updateTurnHint();
     }
 }
 
-void MainWindow::onSurrendered()
+void GameWindow::resetBoard()
+{
+    m_gameOver = false;
+    m_resultShown = false;
+    m_restartPending = false;
+    resetBoardContents();
+}
+
+void GameWindow::onSurrendered()
 {
     // 对方认输：我方获胜（m_resultShown 防止随后 TCP 断开再触发 onDisconnected 重复弹窗）
     m_resultShown = true;
@@ -506,15 +481,15 @@ void MainWindow::onSurrendered()
     m_network->stop();
 }
 
-void MainWindow::applySkin(const QString& imagePath)
+void GameWindow::applySkin(const QString& imagePath)
 {
-    m_board->setBackground(imagePath);
+    applyBoardBackground(imagePath);
     QSettings settings;
     settings.setValue(QStringLiteral("skin"), imagePath);
     setStatus(QStringLiteral("已更换背景"));
 }
 
-void MainWindow::chooseSkinFile()
+void GameWindow::chooseSkinFile()
 {
     const QString path = QFileDialog::getOpenFileName(
         this, QStringLiteral("选择棋盘背景图"), QString(),
@@ -525,97 +500,19 @@ void MainWindow::chooseSkinFile()
     }
 }
 
-void MainWindow::onStatusChanged(const QString& text)
+void GameWindow::onStatusChanged(const QString& text)
 {
     setStatus(text);
 }
 
-void MainWindow::resetBoard()
-{
-    m_gameOver = false;
-    m_resultShown = false;
-    m_restartPending = false;
-    m_chess->init();
-    m_board->repaintBoard();
-    m_board->clearLastMove();
-    updateTurnHint();
-}
-
-void MainWindow::checkGameEnd(chess_kind_t lastKind)
-{
-    if (m_chess->checkOver())
-    {
-        m_gameOver = true;
-        m_resultShown = true;
-        const bool iWin = (lastKind == m_myKind);
-        playSfx(iWin ? QStringLiteral("qrc:/res/win.mp3") : QStringLiteral("qrc:/res/lose.mp3"));
-
-        QMessageBox box(this);
-        box.setWindowTitle(QStringLiteral("对局结束"));
-        box.setIcon(QMessageBox::Information);
-        box.setText(iWin ? QStringLiteral("你赢了！") : QStringLiteral("你输了！"));
-        QPushButton* again = box.addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
-        box.addButton(QStringLiteral("断开"), QMessageBox::RejectRole);
-        box.exec();
-
-        if (box.clickedButton() == again)
-        {
-            onNewGameClicked();
-        }
-        else
-        {
-            // 断开连接：对局已结束不视为认输（m_resultShown 已防误判），留在窗口可重新联机
-            m_network->stop();
-        }
-        return;
-    }
-
-    // 棋盘下满未分胜负 -> 平局
-    bool full = true;
-    const int size = m_chess->getGradeSize();
-    for (int r = 0; r < size && full; r++)
-    {
-        for (int c = 0; c < size; c++)
-        {
-            if (m_chess->getChessData(r, c) == 0)
-            {
-                full = false;
-                break;
-            }
-        }
-    }
-    if (full)
-    {
-        m_gameOver = true;
-        m_resultShown = true;
-        QMessageBox box(this);
-        box.setWindowTitle(QStringLiteral("对局结束"));
-        box.setIcon(QMessageBox::Information);
-        box.setText(QStringLiteral("平局！"));
-        QPushButton* again = box.addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
-        box.addButton(QStringLiteral("断开"), QMessageBox::RejectRole);
-        box.exec();
-
-        if (box.clickedButton() == again)
-        {
-            onNewGameClicked();
-        }
-        else
-        {
-            // 断开连接：对局已结束不视为认输，留在窗口可重新联机
-            m_network->stop();
-        }
-    }
-}
-
-void MainWindow::playSfx(const QString& qrcPath)
+void GameWindow::playSfx(const QString& qrcPath)
 {
     m_sfxPlayer->stop();
     m_sfxPlayer->setSource(QUrl(qrcPath));
     m_sfxPlayer->play();
 }
 
-void MainWindow::setConnectedUi(bool connected)
+void GameWindow::setConnectedUi(bool connected)
 {
     m_connectAct->setEnabled(!connected);
     m_newGameAct->setEnabled(connected);
@@ -624,22 +521,22 @@ void MainWindow::setConnectedUi(bool connected)
     m_disconnectAct->setEnabled(connected);
 }
 
-void MainWindow::setStatus(const QString& text)
+void GameWindow::setStatus(const QString& text)
 {
     statusBar()->showMessage(text);
 }
 
-bool MainWindow::myTurn() const
+bool GameWindow::myTurn() const
 {
-    return m_chess->isBlackTurn() == (m_myKind == CHESS_BLACK);
+    return isBlackTurn() == (m_myKind == CHESS_BLACK);
 }
 
-chess_kind_t MainWindow::opponentKind() const
+chess_kind_t GameWindow::opponentKind() const
 {
     return (m_myKind == CHESS_BLACK) ? CHESS_WHITE : CHESS_BLACK;
 }
 
-void MainWindow::updateTurnHint()
+void GameWindow::updateTurnHint()
 {
     if (!m_connected)
     {
@@ -658,25 +555,23 @@ void MainWindow::updateTurnHint()
         return;
     }
 
-    const bool black = (m_myKind == CHESS_BLACK);
     if (myTurn())
     {
-        m_turnLabel->setText(QStringLiteral("● 轮到你落子（%1）")
-                                 .arg(black ? QStringLiteral("黑") : QStringLiteral("白")));
+        m_turnLabel->setText(myTurnText());
         m_turnLabel->setStyleSheet(
             QStringLiteral("background-color: #52c41a; color: white; border-radius: 10px;"
                            "padding: 2px 12px; font-size: 12px; font-weight: bold;"));
     }
     else
     {
-        m_turnLabel->setText(QStringLiteral("○ 等待对方落子…"));
+        m_turnLabel->setText(waitText());
         m_turnLabel->setStyleSheet(
             QStringLiteral("background-color: #8c8c8c; color: white; border-radius: 10px;"
                            "padding: 2px 12px; font-size: 12px; font-weight: bold;"));
     }
 }
 
-void MainWindow::showResultDialog(const QString& title, const QString& text)
+void GameWindow::showResultDialog(const QString& title, const QString& text)
 {
     QMessageBox box(this);
     box.setWindowTitle(title);
@@ -688,14 +583,14 @@ void MainWindow::showResultDialog(const QString& title, const QString& text)
 
 // ---- OTA 更新 ----
 
-void MainWindow::onCheckUpdateClicked()
+void GameWindow::onCheckUpdateClicked()
 {
     m_updateAct->setEnabled(false);
     setStatus(QStringLiteral("正在检查更新…"));
     m_updater->checkForUpdate();
 }
 
-void MainWindow::onUpdateAvailable(const QString& version, const QString& assetName, const QString& url)
+void GameWindow::onUpdateAvailable(const QString& version, const QString& assetName, const QString& url)
 {
     m_updateAct->setEnabled(true);
     const auto reply = QMessageBox::question(
@@ -714,7 +609,7 @@ void MainWindow::onUpdateAvailable(const QString& version, const QString& assetN
     setStatus(QStringLiteral("正在下载更新…"));
 }
 
-void MainWindow::onUpToDate(const QString& version)
+void GameWindow::onUpToDate(const QString& version)
 {
     m_updateAct->setEnabled(true);
     QMessageBox::information(this, QStringLiteral("检查更新"),
@@ -722,14 +617,14 @@ void MainWindow::onUpToDate(const QString& version)
     setStatus(QStringLiteral("已是最新版本"));
 }
 
-void MainWindow::onCheckFailed(const QString& reason)
+void GameWindow::onCheckFailed(const QString& reason)
 {
     m_updateAct->setEnabled(true);
     QMessageBox::warning(this, QStringLiteral("检查更新失败"), reason);
     setStatus(QStringLiteral("检查更新失败"));
 }
 
-void MainWindow::onDownloadProgress(qint64 received, qint64 total)
+void GameWindow::onDownloadProgress(qint64 received, qint64 total)
 {
     if (total > 0)
     {
@@ -738,7 +633,7 @@ void MainWindow::onDownloadProgress(qint64 received, qint64 total)
     }
 }
 
-void MainWindow::onDownloadFinished(const QString& filePath)
+void GameWindow::onDownloadFinished(const QString& filePath)
 {
     m_updateAct->setEnabled(true);
     setStatus(QStringLiteral("更新包已下载：") + filePath);
@@ -776,7 +671,7 @@ void MainWindow::onDownloadFinished(const QString& filePath)
 #endif
 }
 
-void MainWindow::onDownloadFailed(const QString& reason)
+void GameWindow::onDownloadFailed(const QString& reason)
 {
     m_updateAct->setEnabled(true);
     QMessageBox::warning(this, QStringLiteral("下载失败"),
