@@ -93,8 +93,8 @@ jobs:
         shell: powershell
         run: |
           cmake `
-            -S games/gomoku-ai `
-            -B games/gomoku-ai/build `
+            -S . `
+            -B build `
             -G "Visual Studio 17 2022" `
             -A x64
 
@@ -106,7 +106,7 @@ jobs:
         shell: powershell
         run: |
           cmake `
-            --build games/gomoku-ai/build `
+            --build build `
             --config Release `
             --parallel
 
@@ -118,7 +118,7 @@ jobs:
         shell: powershell
         run: |
           ctest `
-            --test-dir games/gomoku-ai/build `
+            --test-dir build `
             -C Release `
             --output-on-failure
 
@@ -129,7 +129,7 @@ jobs:
       - name: Prepare Windows Dist
         shell: powershell
         run: |
-          $dist = "games/gomoku-ai/dist"
+          $dist = "dist"
 
           if (Test-Path $dist) {
             Remove-Item `
@@ -150,8 +150,8 @@ jobs:
       - name: Deploy Qt Windows
         shell: powershell
         run: |
-          $exe = "games/gomoku-ai/build/Release/gomoku-ai.exe"
-          $dist = "games/gomoku-ai/dist"
+          $exe = "build/Release/gomoku-ai.exe"
+          $dist = "dist"
 
           if (-not (Test-Path $exe)) {
             Write-Error "Executable not found:"
@@ -182,7 +182,7 @@ jobs:
       - name: Check Windows Output
         shell: powershell
         run: |
-          $dist = "games/gomoku-ai/dist"
+          $dist = "dist"
 
           Write-Host "========================================"
           Write-Host "Windows Output"
@@ -208,7 +208,7 @@ jobs:
           }
 
           Compress-Archive `
-            -Path "games/gomoku-ai/dist/*" `
+            -Path "dist/*" `
             -DestinationPath $zip
 
           Write-Host ""
@@ -297,8 +297,8 @@ jobs:
       - name: Configure macOS
         run: |
           cmake \
-            -S games/gomoku-ai \
-            -B games/gomoku-ai/build \
+            -S . \
+            -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
 
@@ -309,7 +309,7 @@ jobs:
       - name: Build macOS
         run: |
           cmake \
-            --build games/gomoku-ai/build \
+            --build build \
             --config Release \
             --parallel
 
@@ -320,7 +320,7 @@ jobs:
       - name: Run Tests
         run: |
           ctest \
-            --test-dir games/gomoku-ai/build \
+            --test-dir build \
             --output-on-failure
 
 
@@ -329,7 +329,7 @@ jobs:
       # ========================================================
       - name: Check macOS Application
         run: |
-          APP="games/gomoku-ai/build/gomoku-ai.app"
+          APP="build/gomoku-ai.app"
 
           if [ ! -d "$APP" ]; then
             echo "ERROR: Application not found:"
@@ -337,7 +337,7 @@ jobs:
 
             echo ""
             echo "Build directory:"
-            find games/gomoku-ai/build \
+            find build \
               -maxdepth 3 \
               -print
 
@@ -353,7 +353,7 @@ jobs:
       # ========================================================
       - name: Deploy Qt macOS
         run: |
-          APP="games/gomoku-ai/build/gomoku-ai.app"
+          APP="build/gomoku-ai.app"
 
           echo "========================================"
           echo "Running macdeployqt"
@@ -367,7 +367,7 @@ jobs:
       # ========================================================
       - name: Check macOS Executable
         run: |
-          EXEC="games/gomoku-ai/build/gomoku-ai.app/Contents/MacOS/gomoku-ai"
+          EXEC="build/gomoku-ai.app/Contents/MacOS/gomoku-ai"
 
           if [ ! -f "$EXEC" ]; then
             echo "ERROR: Executable not found:"
@@ -384,7 +384,7 @@ jobs:
       # ========================================================
       - name: Package macOS
         run: |
-          cd games/gomoku-ai/build
+          cd build
 
           rm -f "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
 
@@ -480,8 +480,8 @@ jobs:
       - name: Configure Linux
         run: |
           cmake \
-            -S games/gomoku-ai \
-            -B games/gomoku-ai/build \
+            -S . \
+            -B build \
             -DCMAKE_BUILD_TYPE=Release
 
 
@@ -491,7 +491,7 @@ jobs:
       - name: Build Linux
         run: |
           cmake \
-            --build games/gomoku-ai/build \
+            --build build \
             --parallel
 
 
@@ -501,7 +501,7 @@ jobs:
       - name: Run Tests
         run: |
           ctest \
-            --test-dir games/gomoku-ai/build \
+            --test-dir build \
             --output-on-failure
 
 
@@ -510,12 +510,12 @@ jobs:
       # --------------------------------------------------------
       - name: Check Linux Executable
         run: |
-          EXE="games/gomoku-ai/build/gomoku-ai"
+          EXE="build/gomoku-ai"
 
           if [ ! -x "$EXE" ]; then
             echo "ERROR: Executable not found:"
             echo "$EXE"
-            find games/gomoku-ai/build \
+            find build \
               -maxdepth 2 \
               -print
             exit 1
@@ -531,8 +531,8 @@ jobs:
       # --------------------------------------------------------
       - name: Deploy Qt Linux
         run: |
-          EXE="games/gomoku-ai/build/gomoku-ai"
-          DIST="games/gomoku-ai/dist"
+          EXE="build/gomoku-ai"
+          DIST="dist"
           QT_PREFIX=$(qmake -query QT_INSTALL_PREFIX)
 
           echo "========================================"
@@ -601,7 +601,7 @@ jobs:
       # --------------------------------------------------------
       - name: Package Linux
         run: |
-          cd games/gomoku-ai/dist
+          cd dist
           rm -f "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
           zip -r "$GITHUB_WORKSPACE/gomoku-ai-linux.zip" .
           echo ""
