@@ -190,6 +190,8 @@ void XiangqiWindow::checkGameEnd(chess_kind_t lastKind)
 void XiangqiWindow::resetBoardContents()
 {
     m_chess->init();
+    // 视角：自己始终在下方（执黑时棋盘上下翻转，对方在上）
+    m_board->setFlipped(m_myKind == CHESS_WHITE);
     m_selectedRow = m_selectedCol = -1;
     m_board->repaintBoard();
     m_board->clearSelected();

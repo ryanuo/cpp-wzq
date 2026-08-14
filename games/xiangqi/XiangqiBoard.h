@@ -21,6 +21,7 @@ public:
     void clearSelected() { setSelected(-1, -1); }
     void setLastMove(int row, int col);        // 最后一手目标格标记
     void clearLastMove() { m_lastRow = m_lastCol = -1; update(); }
+    void setFlipped(bool flipped);             // 视角翻转：自己执黑时上下翻转（自己棋子在下）
 
     // 棋盘底图（用户提供图片后调用；未设置时用 QPainter 按风格绘制底色）
     void setBackground(const QString& imagePath);
@@ -55,6 +56,7 @@ private:
     XiangqiChess* m_chess = nullptr;
     QPixmap m_boardBg;   // 棋盘底图（非空时优先于程序绘制）
     int m_style = 0;     // 程序绘制底色风格（0-3）
+    bool m_flipped = false;  // 视角翻转（黑方视角：上下颠倒）
     int m_selRow = -1;
     int m_selCol = -1;
     int m_lastRow = -1;

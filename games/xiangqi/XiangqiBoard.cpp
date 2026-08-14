@@ -13,12 +13,19 @@ XiangqiBoard::XiangqiBoard(QWidget* parent)
 // 交叉点坐标（逻辑 600 系）：图片模式按图片网格校准，程序模式用固定边距/格距
 QPointF XiangqiBoard::cellPoint(int row, int col) const
 {
+    const int r = m_flipped ? (XiangqiChess::kRows - 1 - row) : row;
     if (!m_boardBg.isNull())
     {
         const float s = static_cast<float>(kLogicSize) / kImgSize;
-        return QPointF((kImgX0 + col * kImgCellX) * s, (kImgY0 + row * kImgCellY) * s);
+        return QPointF((kImgX0 + col * kImgCellX) * s, (kImgY0 + r * kImgCellY) * s);
     }
-    return QPointF(kMargin + col * kCell, kMargin + row * kCell);
+    return QPointF(kMargin + col * kCell, kMargin + r * kCell);
+}
+
+void XiangqiBoard::setFlipped(bool flipped)
+{
+    m_flipped = flipped;
+    update();
 }
 
 void XiangqiBoard::setSelected(int row, int col)
@@ -151,21 +158,23 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
 {
     const QPointF p = cellPoint(row, col);
     const bool red = XiangqiChess::pieceBelongs(piece, true);
+    // 半径按模式自适应：图片底图行距 50.4（逻辑）< 程序模式 60，防棋子压相邻行
+    const int radius = m_boardBg.isNull() ? 25 : 22;
 
     painter.setRenderHint(QPainter::Antialiasing, true);
     // 圆底
     painter.setPen(QPen(red ? QColor(150, 40, 30) : QColor(60, 60, 60), 2));
     painter.setBrush(red ? QColor(248, 220, 200) : QColor(230, 230, 225));
-    painter.drawEllipse(p, 25, 25);
+    painter.drawEllipse(p, radius, radius);
 
     // 汉字
     QFont f = painter.font();
-    f.setPixelSize(26);
+    f.setPixelSize(radius * 2 - 24);
     f.setBold(true);
     painter.setFont(f);
     painter.setPen(red ? QColor(170, 30, 20) : QColor(40, 40, 40));
-    painter.drawText(QRectF(p.x() - 25, p.y() - 25, 50, 50), Qt::AlignCenter,
-                     QString::fromUtf8(XiangqiChess::pieceName(piece)));
+    painter.drawText(QRectF(p.x() - radius, p.y() - radius, radius * 2, radius * 2),
+                     Qt::AlignCenter, QString::fromUtf8(XiangqiChess::pieceName(piece)));
 }
 
 void XiangqiBoard::mousePressEvent(QMouseEvent* event)
@@ -198,6 +207,8 @@ void XiangqiBoard::mousePressEvent(QMouseEvent* event)
     }
     if (bestRow >= 0 && bestDist < 30 * 30)
     {
-        emit cellClicked(bestRow, bestCol);
+        // 翻转视角下点击坐标反算回真实行
+        const int realRow = m_flipped ? (XiangqiChess::kRows - 1 - bestRow) : bestRow;
+        emit cellClicked(realRow, bestCol);
     }
 }
