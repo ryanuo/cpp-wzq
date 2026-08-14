@@ -639,7 +639,8 @@ void GameWindow::onDownloadFinished(const QString& filePath)
     setStatus(QStringLiteral("更新包已下载：") + filePath);
 
 #if defined(Q_OS_WIN)
-    // Windows：自动解压 + 覆盖脚本（主进程退出后 xcopy 新文件，再重启）
+    // Windows：解压 + 延迟覆盖脚本（主进程退出后 xcopy 新文件，再重启）
+    // 注意：不用 timeout 命令——后台分离进程无控制台，timeout 会直接失败导致不覆盖
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString updDir = appDir + QStringLiteral("/updates");
     QDir().mkpath(updDir + QStringLiteral("/extracted"));
@@ -654,16 +655,45 @@ void GameWindow::onDownloadFinished(const QString& filePath)
     {
         QTextStream ts(&batFile);
         ts << "@echo off\r\n"
-           << "timeout /t 2 /nobreak >nul\r\n"
+           << "ping -n 3 127.0.0.1 >nul\r\n"
            << "xcopy /y /e /q \"" << updDir << "\\extracted\\*\" \"" << appDir << "\\\"\r\n"
            << "start \"\" \"" << appDir << "\\gobang.exe\"\r\n"
-           << "del /q \"" << updDir << "\\update.bat\"\r\n";
+           << "rmdir /s /q \"" << updDir << "\"\r\n";
         batFile.close();
     }
     QProcess::startDetached(updDir + QStringLiteral("/update.bat"));
     close();
+#elif defined(Q_OS_MACOS)
+    // macOS：解压 + 延迟替换 .app（主进程退出后脚本替换整个 bundle 并重启）
+    // 脚本放用户可写目录（AppDataLocation），bundle 位置由脚本运行时决定
+    const QString bundlePath = QCoreApplication::applicationDirPath();  // .../gobang.app/Contents/MacOS
+    const QString bundleParent = QDir(bundlePath).filePath(QStringLiteral("../.."));
+    const QString updDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                           + QStringLiteral("/updates");
+    QDir().mkpath(updDir);
+
+    const QString scriptPath = updDir + QStringLiteral("/apply_update.sh");
+    QFile scriptFile(scriptPath);
+    if (scriptFile.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QTextStream ts(&scriptFile);
+        ts << "#!/bin/sh\n"
+           << "sleep 2\n"
+           << "UPD=\"" << updDir << "\"\n"
+           << "BUNDLE_PARENT=\"" << bundleParent << "\"\n"
+           << "ZIP=\"" << filePath << "\"\n"
+           << "unzip -o -q \"$ZIP\" -d \"$UPD/extracted\" || exit 1\n"
+           << "rm -rf \"$BUNDLE_PARENT/gobang.app\"\n"
+           << "cp -R \"$UPD/extracted/gobang.app\" \"$BUNDLE_PARENT/gobang.app\"\n"
+           << "rm -rf \"$UPD\"\n"
+           << "open \"$BUNDLE_PARENT/gobang.app\"\n";
+        scriptFile.close();
+    }
+    QProcess::startDetached(QStringLiteral("/bin/sh"), {scriptPath});
+    setStatus(QStringLiteral("正在应用更新，程序即将重启…"));
+    close();
 #else
-    // macOS/Linux：运行中的程序无法自覆盖，引导用户解压覆盖
+    // Linux：安装方式多样（解压目录/发行包），保持手动引导
     QMessageBox::information(
         this, QStringLiteral("更新"),
         QStringLiteral("更新包已下载到：\n%1\n\n请退出程序后，解压并覆盖原安装目录中的文件。")
