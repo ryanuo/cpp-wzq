@@ -207,8 +207,7 @@ void XiangqiBoard::mousePressEvent(QMouseEvent* event)
     }
     if (bestRow >= 0 && bestDist < 30 * 30)
     {
-        // 翻转视角下点击坐标反算回真实行
-        const int realRow = m_flipped ? (XiangqiChess::kRows - 1 - bestRow) : bestRow;
-        emit cellClicked(realRow, bestCol);
+        // bestRow/bestCol 已是模型坐标（cellPoint 内部已完成视角翻转），直接上报
+        emit cellClicked(bestRow, bestCol);
     }
 }
