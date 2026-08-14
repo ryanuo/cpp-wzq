@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TB
     subgraph LAN["局域网 192.168.14.0/24（同机双开亦支持）"]
-        subgraph PC1["电脑 A（192.168.14.x）— gomoku-ai"]
+        subgraph PC1["电脑 A（192.168.14.x）— gobang"]
             direction TB
             MW1["MainWindow<br/>对局编排 · 悔棋确认 · 胜负对话框 · 对手IP显示"]
             BW1["BoardWidget<br/>棋盘绘制(QPainter) · 鼠标落子换算"]
@@ -18,7 +18,7 @@ flowchart TB
             BW1 --> CH1
             BW1 -. 加载资源 .-> RES1
         end
-        subgraph PC2["电脑 B（192.168.14.y）— gomoku-ai"]
+        subgraph PC2["电脑 B（192.168.14.y）— gobang"]
             direction TB
             MW2["MainWindow"]
             BW2["BoardWidget"]

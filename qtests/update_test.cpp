@@ -31,11 +31,11 @@ int main(int argc, char** argv)
     // ---- 资产匹配 ----
     const QString current = UpdateChecker::currentAssetName();
     CHECK(UpdateChecker::assetMatchesCurrentSystem(current));
-    CHECK(!UpdateChecker::assetMatchesCurrentSystem(QStringLiteral("gomoku-ai-none.zip")));
+    CHECK(!UpdateChecker::assetMatchesCurrentSystem(QStringLiteral("gobang-none.zip")));
     // 平台名
-    CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gomoku-ai-windows-x64.zip")) == "Windows");
-    CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gomoku-ai-macos.zip")) == "macOS");
-    CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gomoku-ai-linux.zip")) == "Linux");
+    CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-windows-x64.zip")) == "Windows");
+    CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-macos.zip")) == "macOS");
+    CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-linux.zip")) == "Linux");
 
     std::printf("当前系统资产: %s\n", current.toUtf8().constData());
     if (g_failures == 0)

@@ -24,9 +24,9 @@
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| Windows | `gomoku-ai-windows-x64.zip` | 解压后运行 `gomoku-ai.exe` |
-| macOS | `gomoku-ai-macos.zip` | 解压后打开 `gomoku-ai.app` |
-| Linux | `gomoku-ai-linux.zip` | 解压后运行 `./gomoku-ai` |
+| Windows | `gobang-windows-x64.zip` | 解压后运行 `gobang.exe` |
+| macOS | `gobang-macos.zip` | 解压后打开 `gobang.app` |
+| Linux | `gobang-linux.zip` | 解压后运行 `./gobang` |
 
 > 发布版本：在仓库打 tag（如 `v0.1.0`）后自动触发 CI 构建并生成 Release。
 
@@ -50,8 +50,8 @@ cmake --build build -j8
 ctest --test-dir build --output-on-failure   # 运行测试（协议 + 悔棋逻辑）
 ```
 
-- 主程序：`gomoku-ai`
-- 测试：`gomoku_net_test`（配对/MOVE/悔棋/认输/断开协议）、`gomoku_chess_test`（落子/悔棋/回合逻辑）
+- 主程序：`gobang`
+- 测试：`gobang_net_test`（配对/MOVE/悔棋/认输/断开协议）、`gobang_chess_test`（落子/悔棋/回合逻辑）
 
 ## 📁 结构
 

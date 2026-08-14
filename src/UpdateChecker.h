@@ -21,7 +21,7 @@ public:
 
     // 语义化版本比较：a > b（"0.2.0" > "0.1.9"，可带 v 前缀）
     static bool versionGreater(const QString& a, const QString& b);
-    // 当前系统对应的资产名（gomoku-ai-windows-x64.zip / -macos.zip / -linux.zip）
+    // 当前系统对应的资产名（gobang-windows-x64.zip / -macos.zip / -linux.zip）
     static QString currentAssetName();
     // 资产名是否匹配当前系统
     static bool assetMatchesCurrentSystem(const QString& assetName);

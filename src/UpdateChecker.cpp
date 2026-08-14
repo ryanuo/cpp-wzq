@@ -56,11 +56,11 @@ bool UpdateChecker::versionGreater(const QString& a, const QString& b)
 QString UpdateChecker::currentAssetName()
 {
 #if defined(Q_OS_WIN)
-    return QStringLiteral("gomoku-ai-windows-x64.zip");
+    return QStringLiteral("gobang-windows-x64.zip");
 #elif defined(Q_OS_MACOS)
-    return QStringLiteral("gomoku-ai-macos.zip");
+    return QStringLiteral("gobang-macos.zip");
 #else
-    return QStringLiteral("gomoku-ai-linux.zip");
+    return QStringLiteral("gobang-linux.zip");
 #endif
 }
 
@@ -89,7 +89,7 @@ QString UpdateChecker::assetPlatformName(const QString& assetName)
 void UpdateChecker::checkForUpdate()
 {
     QNetworkRequest req{QUrl(QString::fromLatin1(kApiUrl))};
-    req.setRawHeader("User-Agent", "gomoku-ai-updater");
+    req.setRawHeader("User-Agent", "gobang-updater");
     req.setRawHeader("Accept", "application/vnd.github+json");
     QNetworkReply* reply = m_nam->get(req);
     connect(reply, &QNetworkReply::finished, this, &UpdateChecker::onReleaseReplyFinished);
@@ -160,7 +160,7 @@ void UpdateChecker::download(const QString& url, const QString& destDir)
     m_downloadTarget = destDir + QLatin1Char('/') + fileName;
 
     QNetworkRequest req{QUrl(url)};
-    req.setRawHeader("User-Agent", "gomoku-ai-updater");
+    req.setRawHeader("User-Agent", "gobang-updater");
     // GitHub releases 资产 302 跳转，Qt 默认 NoLessSafeRedirectPolicy 自动跟随
     QNetworkReply* reply = m_nam->get(req);
     connect(reply, &QNetworkReply::downloadProgress, this,

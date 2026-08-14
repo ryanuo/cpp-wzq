@@ -1,4 +1,4 @@
-name: Build Gomoku AI (Qt)
+name: Build Gobang AI (Qt)
 
 on:
   workflow_dispatch:
@@ -150,7 +150,7 @@ jobs:
       - name: Deploy Qt Windows
         shell: powershell
         run: |
-          $exe = "build/Release/gomoku-ai.exe"
+          $exe = "build/Release/gobang.exe"
           $dist = "dist"
 
           if (-not (Test-Path $exe)) {
@@ -173,7 +173,7 @@ jobs:
             --release `
             --compiler-runtime `
             --no-translations `
-            "$dist/gomoku-ai.exe"
+            "$dist/gobang.exe"
 
 
       # ========================================================
@@ -199,7 +199,7 @@ jobs:
       - name: Package Windows
         shell: powershell
         run: |
-          $zip = "gomoku-ai-windows-x64.zip"
+          $zip = "gobang-windows-x64.zip"
 
           if (Test-Path $zip) {
             Remove-Item `
@@ -222,15 +222,15 @@ jobs:
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gomoku-ai-windows-x64
-          path: gomoku-ai-windows-x64.zip
+          name: gobang-windows-x64
+          path: gobang-windows-x64.zip
 
       # tag 触发时发布到 GitHub Release（三个 job 各自上传，自动合并到同一 Release）
       - name: Publish Windows Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: gomoku-ai-windows-x64.zip
+          files: gobang-windows-x64.zip
           fail_on_unmatched_files: false
 
 
@@ -329,7 +329,7 @@ jobs:
       # ========================================================
       - name: Check macOS Application
         run: |
-          APP="build/gomoku-ai.app"
+          APP="build/gobang.app"
 
           if [ ! -d "$APP" ]; then
             echo "ERROR: Application not found:"
@@ -353,7 +353,7 @@ jobs:
       # ========================================================
       - name: Deploy Qt macOS
         run: |
-          APP="build/gomoku-ai.app"
+          APP="build/gobang.app"
 
           echo "========================================"
           echo "Running macdeployqt"
@@ -367,7 +367,7 @@ jobs:
       # ========================================================
       - name: Check macOS Executable
         run: |
-          EXEC="build/gomoku-ai.app/Contents/MacOS/gomoku-ai"
+          EXEC="build/gobang.app/Contents/MacOS/gobang"
 
           if [ ! -f "$EXEC" ]; then
             echo "ERROR: Executable not found:"
@@ -386,16 +386,16 @@ jobs:
         run: |
           cd build
 
-          rm -f "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
+          rm -f "$GITHUB_WORKSPACE/gobang-macos.zip"
 
           zip \
             -r \
-            "$GITHUB_WORKSPACE/gomoku-ai-macos.zip" \
-            gomoku-ai.app
+            "$GITHUB_WORKSPACE/gobang-macos.zip" \
+            gobang.app
 
           echo ""
           echo "Package created:"
-          echo "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
+          echo "$GITHUB_WORKSPACE/gobang-macos.zip"
 
 
       # ========================================================
@@ -404,15 +404,15 @@ jobs:
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gomoku-ai-macos
-          path: gomoku-ai-macos.zip
+          name: gobang-macos
+          path: gobang-macos.zip
 
       # tag 触发时发布到 GitHub Release
       - name: Publish macOS Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: gomoku-ai-macos.zip
+          files: gobang-macos.zip
           fail_on_unmatched_files: false
 
 
@@ -510,7 +510,7 @@ jobs:
       # --------------------------------------------------------
       - name: Check Linux Executable
         run: |
-          EXE="build/gomoku-ai"
+          EXE="build/gobang"
 
           if [ ! -x "$EXE" ]; then
             echo "ERROR: Executable not found:"
@@ -531,7 +531,7 @@ jobs:
       # --------------------------------------------------------
       - name: Deploy Qt Linux
         run: |
-          EXE="build/gomoku-ai"
+          EXE="build/gobang"
           DIST="dist"
           QT_PREFIX=$(qmake -query QT_INSTALL_PREFIX)
 
@@ -587,7 +587,7 @@ jobs:
           # 修正 rpath: 可执行文件 -> lib/, 插件 -> 上级 lib/
           sudo apt-get update -qq
           sudo apt-get install -y -qq patchelf
-          patchelf --set-rpath '$ORIGIN/lib' "$DIST/gomoku-ai"
+          patchelf --set-rpath '$ORIGIN/lib' "$DIST/gobang"
           find "$DIST/plugins" -name '*.so' \
             -exec patchelf --set-rpath '$ORIGIN/../../lib' {} \;
 
@@ -602,11 +602,11 @@ jobs:
       - name: Package Linux
         run: |
           cd dist
-          rm -f "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
-          zip -r "$GITHUB_WORKSPACE/gomoku-ai-linux.zip" .
+          rm -f "$GITHUB_WORKSPACE/gobang-linux.zip"
+          zip -r "$GITHUB_WORKSPACE/gobang-linux.zip" .
           echo ""
           echo "Package created:"
-          echo "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
+          echo "$GITHUB_WORKSPACE/gobang-linux.zip"
 
 
       # --------------------------------------------------------
@@ -615,13 +615,13 @@ jobs:
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gomoku-ai-linux
-          path: gomoku-ai-linux.zip
+          name: gobang-linux
+          path: gobang-linux.zip
 
       # tag 触发时发布到 GitHub Release
       - name: Publish Linux Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: gomoku-ai-linux.zip
+          files: gobang-linux.zip
           fail_on_unmatched_files: false

@@ -707,7 +707,7 @@ void MainWindow::onDownloadFinished(const QString& filePath)
         ts << "@echo off\r\n"
            << "timeout /t 2 /nobreak >nul\r\n"
            << "xcopy /y /e /q \"" << updDir << "\\extracted\\*\" \"" << appDir << "\\\"\r\n"
-           << "start \"\" \"" << appDir << "\\gomoku-ai.exe\"\r\n"
+           << "start \"\" \"" << appDir << "\\gobang.exe\"\r\n"
            << "del /q \"" << updDir << "\\update.bat\"\r\n";
         batFile.close();
     }
