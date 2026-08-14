@@ -367,9 +367,17 @@ void NetworkManager::handleLine(const QByteArray& line)
             emit moveReceived(row, col);
         }
     }
-    else if (parts[0] == "RESTART" && m_connected)
+    else if (parts[0] == "RESTART_REQ" && m_connected)
     {
-        emit restartReceived();
+        emit restartRequested();
+    }
+    else if (parts[0] == "RESTART_OK" && m_connected)
+    {
+        emit restartAccepted();
+    }
+    else if (parts[0] == "RESTART_NO" && m_connected)
+    {
+        emit restartRejected();
     }
     else if (parts[0] == "UNDO" && m_connected)
     {
@@ -427,11 +435,19 @@ void NetworkManager::sendMove(int row, int col)
     }
 }
 
-void NetworkManager::sendRestart()
+void NetworkManager::sendRestartRequest()
 {
     if (m_connected)
     {
-        sendLine("RESTART");
+        sendLine("RESTART_REQ");
+    }
+}
+
+void NetworkManager::sendRestartReply(bool accept)
+{
+    if (m_connected)
+    {
+        sendLine(accept ? "RESTART_OK" : "RESTART_NO");
     }
 }
 

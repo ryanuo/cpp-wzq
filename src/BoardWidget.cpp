@@ -10,8 +10,8 @@ BoardWidget::BoardWidget(QWidget* parent)
     setMinimumSize(400, 400);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    // 资源来自 resources.qrc（原 EasyX 的 loadimage 改为 Qt 资源）
-    setBackground(QStringLiteral(":/res/board_1_cream.png"));
+    // 资源来自 resources.qrc（原 EasyX 的 loadimage 改为 Qt 资源），默认翡翠绿棋盘
+    setBackground(QStringLiteral(":/res/board_2_mint.png"));
     m_blackPiece = QPixmap(QStringLiteral(":/res/black.png"));
     m_whitePiece = QPixmap(QStringLiteral(":/res/white.png"));
 }

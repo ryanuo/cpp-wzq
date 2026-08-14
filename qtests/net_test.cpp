@@ -1,7 +1,7 @@
 // 联机协议 headless 自测（ctest 目标）：
 // 1. 同进程两实例输入相同密码 -> 自动配对成功，主客角色互异
 // 2. MOVE 双向往返
-// 3. RESTART 通知
+// 3. 再来一局协议（RESTART_REQ / RESTART_OK / RESTART_NO）
 // 4. 不同密码不配对
 // 全部通过返回 0，否则返回 1。
 #include <QCoreApplication>
@@ -35,7 +35,6 @@ bool g_aConnected = false;
 bool g_bConnected = false;
 bool g_aGotMove = false;
 bool g_bGotMove = false;
-bool g_aGotRestart = false;
 
 } // namespace
 
@@ -54,7 +53,6 @@ int main(int argc, char* argv[])
     QObject::connect(&b, &NetworkManager::moveReceived, [](int r, int c) {
         if (r == 5 && c == 5) g_bGotMove = true;
     });
-    QObject::connect(&b, &NetworkManager::restartReceived, [] { g_aGotRestart = true; });
 
     QObject::connect(&a, &NetworkManager::statusChanged, [](const QString& s) {
         std::printf("  [A] %s\n", s.toUtf8().constData());
@@ -101,14 +99,41 @@ int main(int argc, char* argv[])
     }
     std::printf("PASS: MOVE 双向往返正常\n");
 
-    // 3. RESTART 通知
-    a.sendRestart();
-    if (!waitUntil([] { return g_aGotRestart; }))
+    // 3. 再来一局协议 (RESTART_REQ / RESTART_OK / RESTART_NO)
+    bool bGotReq = false;   // B 收到 A 的重开请求
+    bool aGotOk = false;    // A 收到 B 的同意
+    bool aGotReq = false;   // A 收到 B 的重开请求
+    bool bGotNo = false;    // B 收到 A 的拒绝
+    QObject::connect(&b, &NetworkManager::restartRequested, [&] { bGotReq = true; });
+    QObject::connect(&a, &NetworkManager::restartAccepted, [&] { aGotOk = true; });
+    QObject::connect(&a, &NetworkManager::restartRequested, [&] { aGotReq = true; });
+    QObject::connect(&b, &NetworkManager::restartRejected, [&] { bGotNo = true; });
+
+    a.sendRestartRequest();          // A 请求重开 -> B 收到请求
+    if (!waitUntil([&] { return bGotReq; }))
     {
-        std::printf("FAIL: RESTART 未到达\n");
+        std::printf("FAIL: RESTART_REQ 未到达\n");
         return 1;
     }
-    std::printf("PASS: RESTART 通知正常\n");
+    b.sendRestartReply(true);        // B 同意 -> A 收到同意
+    if (!waitUntil([&] { return aGotOk; }))
+    {
+        std::printf("FAIL: RESTART_OK 未到达\n");
+        return 1;
+    }
+    b.sendRestartRequest();          // B 再请求 -> A 收到请求
+    if (!waitUntil([&] { return aGotReq; }))
+    {
+        std::printf("FAIL: RESTART_REQ (B->A) 未到达\n");
+        return 1;
+    }
+    a.sendRestartReply(false);       // A 拒绝 -> B 收到拒绝
+    if (!waitUntil([&] { return bGotNo; }))
+    {
+        std::printf("FAIL: RESTART_NO 未到达\n");
+        return 1;
+    }
+    std::printf("PASS: 再来一局协议正常 (REQ/OK/NO 往返)\n");
 
     // 3.5 悔棋协议往返 (UNDO / UNDO_OK / UNDO_NO)
     bool aGotUndo = false;

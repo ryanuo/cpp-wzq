@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPixmap>
+#include <QString>
 #include <QWidget>
 
 #include "Chess.h"
