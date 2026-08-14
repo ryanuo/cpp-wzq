@@ -89,11 +89,10 @@ MainWindow::MainWindow(QWidget* parent)
     topBar->addStretch();
     topBar->addWidget(m_updateBtn);
 
-    // 回合提示（按钮行与棋盘之间的独立一行，不遮挡棋盘）
+    // 回合提示（按钮行与棋盘之间的独立一行，不遮挡棋盘；未连接时隐藏）
     m_turnLabel = new QLabel(this);
     m_turnLabel->setAlignment(Qt::AlignCenter);
-    m_turnLabel->setStyleSheet(
-        QStringLiteral("font-size: 16px; font-weight: bold; color: #757575; padding: 3px;"));
+    m_turnLabel->setVisible(false);
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
@@ -585,30 +584,36 @@ void MainWindow::updateTurnLabel()
 {
     if (!m_connected)
     {
-        m_turnLabel->setText(QStringLiteral("未连接 · 点击「联机对战」输入密码配对"));
-        m_turnLabel->setStyleSheet(
-            QStringLiteral("font-size: 15px; color: #757575; padding: 3px;"));
+        // 未连接：隐藏标签，棋盘上方留白（引导文字在状态栏）
+        m_turnLabel->setVisible(false);
         return;
     }
+    m_turnLabel->setVisible(true);
+
     if (m_gameOver)
     {
         m_turnLabel->setText(QStringLiteral("对局结束"));
         m_turnLabel->setStyleSheet(
-            QStringLiteral("font-size: 15px; font-weight: bold; color: #b26a00; padding: 3px;"));
+            QStringLiteral("background-color: #d48806; color: white; border-radius: 13px;"
+                           "padding: 4px 18px; font-size: 15px; font-weight: bold;"));
         return;
     }
+
     const bool black = (m_myKind == CHESS_BLACK);
     if (myTurn())
     {
-        m_turnLabel->setText(QStringLiteral("● 轮到你落子（%1）").arg(black ? QStringLiteral("黑") : QStringLiteral("白")));
+        m_turnLabel->setText(QStringLiteral("● 轮到你落子（%1）")
+                                 .arg(black ? QStringLiteral("黑") : QStringLiteral("白")));
         m_turnLabel->setStyleSheet(
-            QStringLiteral("font-size: 16px; font-weight: bold; color: #2e7d32; padding: 3px;"));
+            QStringLiteral("background-color: #52c41a; color: white; border-radius: 13px;"
+                           "padding: 4px 18px; font-size: 15px; font-weight: bold;"));
     }
     else
     {
         m_turnLabel->setText(QStringLiteral("○ 等待对方落子…"));
         m_turnLabel->setStyleSheet(
-            QStringLiteral("font-size: 16px; font-weight: bold; color: #9e9e9e; padding: 3px;"));
+            QStringLiteral("background-color: #8c8c8c; color: white; border-radius: 13px;"
+                           "padding: 4px 18px; font-size: 15px; font-weight: bold;"));
     }
 }
 
