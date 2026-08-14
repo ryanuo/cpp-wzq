@@ -1,0 +1,627 @@
+name: Build Gomoku AI (Qt)
+
+on:
+  workflow_dispatch:
+  # 推送 v* tag 时自动构建并发布 Release（可从 Releases 下载对应系统版本）
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ============================================================
+  # Windows
+  # ============================================================
+  build-windows:
+
+    name: Windows / Qt 6.8.3 / MSVC 2022
+
+    runs-on: windows-2022
+
+    steps:
+
+      # ========================================================
+      # Checkout
+      # ========================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # ========================================================
+      # Install Qt
+      # ========================================================
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: win64_msvc2022_64
+          modules: qtmultimedia
+          cache: true
+
+
+      # ========================================================
+      # Check Environment
+      # ========================================================
+      - name: Check Windows Environment
+        shell: powershell
+        run: |
+          Write-Host "========================================"
+          Write-Host "Windows"
+          Write-Host "========================================"
+
+          Write-Host ""
+          Write-Host "CMake:"
+          cmake --version
+
+          Write-Host ""
+          Write-Host "Visual Studio:"
+
+          # vswhere 实际位于 (x86) 目录, 回退到 64 位路径
+          $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vsWhere)) {
+            $vsWhere = "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+          }
+          if (-not (Test-Path $vsWhere)) {
+            Write-Error "vswhere.exe was not found."
+            exit 1
+          }
+
+          $vsPath = & $vsWhere `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+
+          if (-not $vsPath) {
+            Write-Error "Visual Studio 2022 with MSVC was not found."
+            exit 1
+          }
+
+          Write-Host $vsPath
+
+          Write-Host ""
+          Write-Host "Qt6_DIR:"
+          Write-Host $env:Qt6_DIR
+
+
+      # ========================================================
+      # Configure CMake
+      # ========================================================
+      - name: Configure Windows
+        shell: powershell
+        run: |
+          cmake `
+            -S games/gomoku-ai `
+            -B games/gomoku-ai/build `
+            -G "Visual Studio 17 2022" `
+            -A x64
+
+
+      # ========================================================
+      # Build
+      # ========================================================
+      - name: Build Windows
+        shell: powershell
+        run: |
+          cmake `
+            --build games/gomoku-ai/build `
+            --config Release `
+            --parallel
+
+
+      # ========================================================
+      # Test (headless 联机协议自测)
+      # ========================================================
+      - name: Run Tests
+        shell: powershell
+        run: |
+          ctest `
+            --test-dir games/gomoku-ai/build `
+            -C Release `
+            --output-on-failure
+
+
+      # ========================================================
+      # Prepare Dist
+      # ========================================================
+      - name: Prepare Windows Dist
+        shell: powershell
+        run: |
+          $dist = "games/gomoku-ai/dist"
+
+          if (Test-Path $dist) {
+            Remove-Item `
+              -Path $dist `
+              -Recurse `
+              -Force
+          }
+
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path $dist | Out-Null
+
+
+      # ========================================================
+      # Deploy Qt
+      # ========================================================
+      - name: Deploy Qt Windows
+        shell: powershell
+        run: |
+          $exe = "games/gomoku-ai/build/Release/gomoku-ai.exe"
+          $dist = "games/gomoku-ai/dist"
+
+          if (-not (Test-Path $exe)) {
+            Write-Error "Executable not found:"
+            Write-Error $exe
+            exit 1
+          }
+
+          Write-Host "Copy executable:"
+          Write-Host $exe
+
+          Copy-Item `
+            -Path $exe `
+            -Destination $dist
+
+          Write-Host ""
+          Write-Host "Running windeployqt..."
+
+          windeployqt `
+            --release `
+            --compiler-runtime `
+            --no-translations `
+            "$dist/gomoku-ai.exe"
+
+
+      # ========================================================
+      # Check Windows Output
+      # ========================================================
+      - name: Check Windows Output
+        shell: powershell
+        run: |
+          $dist = "games/gomoku-ai/dist"
+
+          Write-Host "========================================"
+          Write-Host "Windows Output"
+          Write-Host "========================================"
+
+          Get-ChildItem `
+            -Path $dist `
+            -Recurse
+
+
+      # ========================================================
+      # Package Windows
+      # ========================================================
+      - name: Package Windows
+        shell: powershell
+        run: |
+          $zip = "gomoku-ai-windows-x64.zip"
+
+          if (Test-Path $zip) {
+            Remove-Item `
+              -Path $zip `
+              -Force
+          }
+
+          Compress-Archive `
+            -Path "games/gomoku-ai/dist/*" `
+            -DestinationPath $zip
+
+          Write-Host ""
+          Write-Host "Package created:"
+          Write-Host $zip
+
+
+      # ========================================================
+      # Upload Windows Artifact
+      # ========================================================
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gomoku-ai-windows-x64
+          path: gomoku-ai-windows-x64.zip
+
+      # tag 触发时发布到 GitHub Release（三个 job 各自上传，自动合并到同一 Release）
+      - name: Publish Windows Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gomoku-ai-windows-x64.zip
+          fail_on_unmatched_files: false
+
+
+
+  # ============================================================
+  # macOS
+  # ============================================================
+  build-macos:
+
+    name: macOS 15 / Qt 6.8.3 / Clang
+
+    runs-on: macos-15
+
+    steps:
+
+      # ========================================================
+      # Checkout
+      # ========================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # ========================================================
+      # Install Qt
+      # ========================================================
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: clang_64
+          modules: qtmultimedia
+          cache: true
+
+
+      # ========================================================
+      # Check Environment
+      # ========================================================
+      - name: Check macOS Environment
+        run: |
+          echo "========================================"
+          echo "macOS"
+          echo "========================================"
+
+          echo ""
+          echo "System:"
+          sw_vers
+
+          echo ""
+          echo "Architecture:"
+          uname -m
+
+          echo ""
+          echo "CMake:"
+          cmake --version
+
+          echo ""
+          echo "Qt:"
+          qmake --version
+
+
+      # ========================================================
+      # Configure CMake
+      # ========================================================
+      - name: Configure macOS
+        run: |
+          cmake \
+            -S games/gomoku-ai \
+            -B games/gomoku-ai/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+
+
+      # ========================================================
+      # Build
+      # ========================================================
+      - name: Build macOS
+        run: |
+          cmake \
+            --build games/gomoku-ai/build \
+            --config Release \
+            --parallel
+
+
+      # ========================================================
+      # Test (headless 联机协议自测)
+      # ========================================================
+      - name: Run Tests
+        run: |
+          ctest \
+            --test-dir games/gomoku-ai/build \
+            --output-on-failure
+
+
+      # ========================================================
+      # Check APP
+      # ========================================================
+      - name: Check macOS Application
+        run: |
+          APP="games/gomoku-ai/build/gomoku-ai.app"
+
+          if [ ! -d "$APP" ]; then
+            echo "ERROR: Application not found:"
+            echo "$APP"
+
+            echo ""
+            echo "Build directory:"
+            find games/gomoku-ai/build \
+              -maxdepth 3 \
+              -print
+
+            exit 1
+          fi
+
+          echo "Application found:"
+          echo "$APP"
+
+
+      # ========================================================
+      # Deploy Qt
+      # ========================================================
+      - name: Deploy Qt macOS
+        run: |
+          APP="games/gomoku-ai/build/gomoku-ai.app"
+
+          echo "========================================"
+          echo "Running macdeployqt"
+          echo "========================================"
+
+          macdeployqt "$APP"
+
+
+      # ========================================================
+      # Check Executable
+      # ========================================================
+      - name: Check macOS Executable
+        run: |
+          EXEC="games/gomoku-ai/build/gomoku-ai.app/Contents/MacOS/gomoku-ai"
+
+          if [ ! -f "$EXEC" ]; then
+            echo "ERROR: Executable not found:"
+            echo "$EXEC"
+            exit 1
+          fi
+
+          echo "Executable:"
+          file "$EXEC"
+
+
+      # ========================================================
+      # Package macOS
+      # ========================================================
+      - name: Package macOS
+        run: |
+          cd games/gomoku-ai/build
+
+          rm -f "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
+
+          zip \
+            -r \
+            "$GITHUB_WORKSPACE/gomoku-ai-macos.zip" \
+            gomoku-ai.app
+
+          echo ""
+          echo "Package created:"
+          echo "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
+
+
+      # ========================================================
+      # Upload macOS Artifact
+      # ========================================================
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gomoku-ai-macos
+          path: gomoku-ai-macos.zip
+
+      # tag 触发时发布到 GitHub Release
+      - name: Publish macOS Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gomoku-ai-macos.zip
+          fail_on_unmatched_files: false
+
+
+
+  # ============================================================
+  # Linux
+  # ============================================================
+  build-linux:
+
+    name: Linux / Qt 6.8.3 / GCC
+
+    runs-on: ubuntu-24.04
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # --------------------------------------------------------
+      # Install Qt
+      # --------------------------------------------------------
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: linux_gcc_64
+          modules: qtmultimedia
+          install-deps: true
+          cache: true
+
+
+      # --------------------------------------------------------
+      # Check Environment
+      # --------------------------------------------------------
+      - name: Check Linux Environment
+        run: |
+          echo "========================================"
+          echo "Linux"
+          echo "========================================"
+
+          echo ""
+          echo "System:"
+          head -2 /etc/os-release
+
+          echo ""
+          echo "Architecture:"
+          uname -m
+
+          echo ""
+          echo "CMake:"
+          cmake --version
+
+          echo ""
+          echo "Compiler:"
+          gcc --version | head -1
+
+
+      # --------------------------------------------------------
+      # Configure
+      # --------------------------------------------------------
+      - name: Configure Linux
+        run: |
+          cmake \
+            -S games/gomoku-ai \
+            -B games/gomoku-ai/build \
+            -DCMAKE_BUILD_TYPE=Release
+
+
+      # --------------------------------------------------------
+      # Build
+      # --------------------------------------------------------
+      - name: Build Linux
+        run: |
+          cmake \
+            --build games/gomoku-ai/build \
+            --parallel
+
+
+      # --------------------------------------------------------
+      # Test (headless 联机协议自测)
+      # --------------------------------------------------------
+      - name: Run Tests
+        run: |
+          ctest \
+            --test-dir games/gomoku-ai/build \
+            --output-on-failure
+
+
+      # --------------------------------------------------------
+      # Check output
+      # --------------------------------------------------------
+      - name: Check Linux Executable
+        run: |
+          EXE="games/gomoku-ai/build/gomoku-ai"
+
+          if [ ! -x "$EXE" ]; then
+            echo "ERROR: Executable not found:"
+            echo "$EXE"
+            find games/gomoku-ai/build \
+              -maxdepth 2 \
+              -print
+            exit 1
+          fi
+
+          echo "Executable found:"
+          echo "$EXE"
+          file "$EXE"
+
+
+      # --------------------------------------------------------
+      # Deploy Qt (拷贝运行库 + 插件 + 修正 rpath)
+      # --------------------------------------------------------
+      - name: Deploy Qt Linux
+        run: |
+          EXE="games/gomoku-ai/build/gomoku-ai"
+          DIST="games/gomoku-ai/dist"
+          QT_PREFIX=$(qmake -query QT_INSTALL_PREFIX)
+
+          echo "========================================"
+          echo "Copy executable and Qt libraries"
+          echo "========================================"
+
+          rm -rf "$DIST"
+          mkdir -p "$DIST/lib" "$DIST/plugins"
+
+          cp "$EXE" "$DIST/"
+
+          # Qt 运行库
+          ldd "$EXE" \
+            | grep -oE '/[^ ]*libQt6[^ ]*' \
+            | sort -u \
+            | while read -r lib; do
+                cp "$lib" "$DIST/lib/"
+                echo "copied: $lib"
+              done
+
+          # ICU 库(部分发行版不预装)
+          ldd "$EXE" \
+            | grep -oE '/[^ ]*libicu[^ ]*' \
+            | sort -u \
+            | while read -r lib; do
+                cp "$lib" "$DIST/lib/"
+              done
+
+          # Qt 插件: 平台 / 图片 / 多媒体 / 音频
+          cp -r "$QT_PREFIX/plugins/platforms" "$DIST/plugins/"
+          cp -r "$QT_PREFIX/plugins/imageformats" "$DIST/plugins/"
+          if [ -d "$QT_PREFIX/plugins/multimedia" ]; then
+            cp -r "$QT_PREFIX/plugins/multimedia" "$DIST/plugins/"
+          fi
+          if [ -d "$QT_PREFIX/plugins/audio" ]; then
+            cp -r "$QT_PREFIX/plugins/audio" "$DIST/plugins/"
+          fi
+
+          # 插件依赖库 (libjpeg/libpng/libav* 等, 目标机可能缺失):
+          # 排除 glibc/gcc 运行时核心, 其余全部拷入 dist/lib
+          # (插件 rpath 已指向 $ORIGIN/../../lib, 可从此目录加载)
+          for so in $(find "$DIST/plugins" -name '*.so'); do
+            ldd "$so" \
+              | grep -oE '/[^ ]*\.so(\.[0-9]+)*' \
+              | grep -vE '/(libc|libm|libgcc_s|libstdc\+\+|ld-linux[^ ]*|libpthread|libdl|librt)\.so(\.|$)' \
+              | sort -u \
+              | while read -r lib; do
+                  cp -n "$lib" "$DIST/lib/" 2>/dev/null || true
+                done
+          done
+
+          # 修正 rpath: 可执行文件 -> lib/, 插件 -> 上级 lib/
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq patchelf
+          patchelf --set-rpath '$ORIGIN/lib' "$DIST/gomoku-ai"
+          find "$DIST/plugins" -name '*.so' \
+            -exec patchelf --set-rpath '$ORIGIN/../../lib' {} \;
+
+          echo ""
+          echo "Deploy output:"
+          find "$DIST" -maxdepth 3 -print
+
+
+      # --------------------------------------------------------
+      # Package
+      # --------------------------------------------------------
+      - name: Package Linux
+        run: |
+          cd games/gomoku-ai/dist
+          rm -f "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
+          zip -r "$GITHUB_WORKSPACE/gomoku-ai-linux.zip" .
+          echo ""
+          echo "Package created:"
+          echo "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
+
+
+      # --------------------------------------------------------
+      # Upload Artifact
+      # --------------------------------------------------------
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gomoku-ai-linux
+          path: gomoku-ai-linux.zip
+
+      # tag 触发时发布到 GitHub Release
+      - name: Publish Linux Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gomoku-ai-linux.zip
+          fail_on_unmatched_files: false
