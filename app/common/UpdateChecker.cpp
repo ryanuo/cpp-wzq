@@ -17,20 +17,25 @@ constexpr auto kApiUrl =
 constexpr auto kReleasePage =
     "https://github.com/ryanuo/cpp-wzq/releases/latest";
 
-// GitHub 加速镜像（国内直连慢，全部走镜像；按实测可达性排序）
-// 镜像可用性会变化，按需增删；全部失败时提示手动下载
+// GitHub 加速镜像（国内直连慢，优先走镜像；按实测可用性排序）
+// 镜像可用性波动大（第三方服务），按需增删；全部失败后兜底官方直连（慢但可用）
 const char* kMirrorPrefixes[] = {
-    "https://gh-proxy.com/",        // 0: 首选（实测可用）
-    "https://mirror.ghproxy.com/",  // 1
-    "https://ghfast.top/",          // 2
+    "https://gh-proxy.com/",   // 0: 首选（实测 200）
+    "https://ghfast.top/",     // 1: 当前 403, 可能恢复
+    "https://ghproxy.net/",    // 2: 当前 403, 可能恢复
 };
 constexpr int kMirrorCount = 3;
+constexpr int kTotalSources = kMirrorCount + 1;  // 镜像 + 官方直连兜底
 constexpr int kCheckTimeoutMs = 10000;  // 检查请求超时
 constexpr int kDownloadTimeoutMs = 30000; // 下载请求超时
 } // namespace
 
 QString UpdateChecker::mirrorUrl(int index, const QString& rawUrl)
 {
+    if (index >= kMirrorCount)
+    {
+        return rawUrl;  // 官方直连兜底
+    }
     return QString::fromLatin1(kMirrorPrefixes[index]) + rawUrl;
 }
 
@@ -112,10 +117,10 @@ void UpdateChecker::checkForUpdate()
 
 bool UpdateChecker::tryCheckNextMirror(int index)
 {
-    if (index >= kMirrorCount)
+    if (index >= kTotalSources)
     {
-        // 所有镜像均失败：提示手动下载
-        emit checkFailed(QStringLiteral("无法连接更新服务器（已尝试官方与加速镜像）。\n"
+        // 所有镜像与官方兜底均失败：提示手动下载
+        emit checkFailed(QStringLiteral("无法连接更新服务器（已尝试加速镜像与官方源）。\n"
                                         "可手动打开 Releases 页下载：\n")
                          + QString::fromLatin1(kReleasePage));
         return false;
@@ -204,9 +209,9 @@ void UpdateChecker::download(const QString& url, const QString& destDir)
 
 void UpdateChecker::tryDownloadWithMirror(int index)
 {
-    if (index >= kMirrorCount)
+    if (index >= kTotalSources)
     {
-        emit downloadFailed(QStringLiteral("下载失败（已尝试官方与加速镜像）。\n"
+        emit downloadFailed(QStringLiteral("下载失败（已尝试加速镜像与官方源）。\n"
                                            "可手动打开 Releases 页下载：\n")
                             + QString::fromLatin1(kReleasePage));
         return;

@@ -1,5 +1,7 @@
 #include "XiangqiChess.h"
 
+#include <cstdlib>  // abs()（Linux gcc 需要显式引入）
+
 namespace {
 
 // 初始布局（row 0 = 黑方底线 → row 9 = 红方底线）
