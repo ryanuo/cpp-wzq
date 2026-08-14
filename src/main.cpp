@@ -6,6 +6,8 @@
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
+    // 版本号（CMake 注入，OTA 更新对比用）
+    QCoreApplication::setApplicationVersion(QStringLiteral(GOMOKU_APP_VERSION));
 
     MainWindow w;
     w.show();

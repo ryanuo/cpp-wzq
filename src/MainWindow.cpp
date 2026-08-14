@@ -2,21 +2,26 @@
 
 #include <QAudioOutput>
 #include <QCloseEvent>
+#include <QDir>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMediaPlayer>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QSettings>
 #include <QSoundEffect>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QVBoxLayout>
 
 #include "BoardWidget.h"
 #include "NetworkManager.h"
+#include "UpdateChecker.h"
 
 namespace {
 
@@ -70,6 +75,10 @@ MainWindow::MainWindow(QWidget* parent)
     m_skinBtn = new QPushButton(QStringLiteral("换肤"), this);
     m_skinBtn->setMenu(skinMenu);
 
+    // 检查更新（OTA）
+    m_updateBtn = new QPushButton(QStringLiteral("检查更新"), this);
+    connect(m_updateBtn, &QPushButton::clicked, this, &MainWindow::onCheckUpdateClicked);
+
     auto* topBar = new QHBoxLayout;
     topBar->addWidget(m_connectBtn);
     topBar->addWidget(m_newGameBtn);
@@ -78,15 +87,24 @@ MainWindow::MainWindow(QWidget* parent)
     topBar->addWidget(m_skinBtn);
     topBar->addWidget(m_disconnectBtn);
     topBar->addStretch();
+    topBar->addWidget(m_updateBtn);
+
+    // 回合提示（按钮行与棋盘之间的独立一行，不遮挡棋盘）
+    m_turnLabel = new QLabel(this);
+    m_turnLabel->setAlignment(Qt::AlignCenter);
+    m_turnLabel->setStyleSheet(
+        QStringLiteral("font-size: 16px; font-weight: bold; color: #757575; padding: 3px;"));
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
     layout->addLayout(topBar);
+    layout->addWidget(m_turnLabel);
     layout->addWidget(m_board);  // 拉伸填满，窗口缩放时棋盘等比跟随
     layout->setContentsMargins(8, 8, 8, 8);
     setCentralWidget(central);
 
     statusBar()->showMessage(QStringLiteral("未连接 · 点击「联机对战」输入密码配对"));
+    updateTurnLabel();
 
     // 联机
     m_network = new NetworkManager(this);
@@ -100,6 +118,15 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_network, &NetworkManager::undoRejected, this, &MainWindow::onUndoRejected);
     connect(m_network, &NetworkManager::surrendered, this, &MainWindow::onSurrendered);
     connect(m_network, &NetworkManager::disconnected, this, &MainWindow::onDisconnected);
+
+    // OTA 更新
+    m_updater = new UpdateChecker(this);
+    connect(m_updater, &UpdateChecker::updateAvailable, this, &MainWindow::onUpdateAvailable);
+    connect(m_updater, &UpdateChecker::upToDate, this, &MainWindow::onUpToDate);
+    connect(m_updater, &UpdateChecker::checkFailed, this, &MainWindow::onCheckFailed);
+    connect(m_updater, &UpdateChecker::downloadProgress, this, &MainWindow::onDownloadProgress);
+    connect(m_updater, &UpdateChecker::downloadFinished, this, &MainWindow::onDownloadFinished);
+    connect(m_updater, &UpdateChecker::downloadFailed, this, &MainWindow::onDownloadFailed);
 
     // 恢复上次换肤（默认米白色棋盘）
     QSettings settings;
@@ -254,8 +281,10 @@ void MainWindow::onCellClicked(int row, int col)
     ChessPos pos(row, col);
     m_chess->chessDown(&pos, m_myKind);
     m_board->repaintBoard();
+    m_board->setLastMove(row, col);
     m_downSound->play();
     m_network->sendMove(row, col);
+    updateTurnLabel();
     checkGameEnd(m_myKind);
 }
 
@@ -278,6 +307,7 @@ void MainWindow::onConnected(bool isHost)
     setStatus(isHost ? QStringLiteral("已连接 · 你执黑（先手） · 对手 IP: ") + peerIp
                      : QStringLiteral("已连接 · 你执白（后手） · 对手 IP: ") + peerIp);
     setWindowTitle(QStringLiteral("五子棋 · 局域网对战 - 对手 ") + peerIp);
+    updateTurnLabel();
 }
 
 void MainWindow::onMoveReceived(int row, int col)
@@ -294,13 +324,16 @@ void MainWindow::onMoveReceived(int row, int col)
     ChessPos pos(row, col);
     m_chess->chessDown(&pos, opponentKind());
     m_board->repaintBoard();
+    m_board->setLastMove(row, col);
     m_downSound->play();
+    updateTurnLabel();
     checkGameEnd(opponentKind());
 }
 
 void MainWindow::onRestartReceived()
 {
     resetBoard();
+    updateTurnLabel();
     setStatus(m_myKind == CHESS_BLACK ? QStringLiteral("新的一局 · 你执黑（先手），请落子")
                                       : QStringLiteral("新的一局 · 你执白（后手），等待对方落子"));
 }
@@ -323,14 +356,12 @@ void MainWindow::onDisconnected()
     if (opponentLeft)
     {
         playSfx(QStringLiteral("qrc:/res/win.mp3"));
-        QMessageBox box(this);
-        box.setWindowTitle(QStringLiteral("对局结束"));
-        box.setIconPixmap(QPixmap(QStringLiteral(":/res/win.jpg")));
-        box.setText(QStringLiteral("对方已断开连接，视为认输，你获胜！"));
-        box.addButton(QStringLiteral("确定"), QMessageBox::AcceptRole);
-        box.exec();
+        showResultDialog(QStringLiteral("对局结束"),
+                         QStringLiteral("对方已断开连接，视为认输，你获胜！"),
+                         QStringLiteral(":/res/win.jpg"));
     }
     setStatus(opponentLeft ? QStringLiteral("对方已断开（视为认输），你获胜") : QStringLiteral("连接已断开"));
+    updateTurnLabel();
 }
 
 void MainWindow::onSearchFailed(const QString& reason)
@@ -405,6 +436,8 @@ void MainWindow::doUndo()
     if (m_chess->undoLast())
     {
         m_board->repaintBoard();
+        m_board->clearLastMove();  // 悔棋后无最后一手标记
+        updateTurnLabel();
     }
 }
 
@@ -412,12 +445,8 @@ void MainWindow::onSurrendered()
 {
     // 对方认输：我方获胜
     playSfx(QStringLiteral("qrc:/res/win.mp3"));
-    QMessageBox box(this);
-    box.setWindowTitle(QStringLiteral("对局结束"));
-    box.setIconPixmap(QPixmap(QStringLiteral(":/res/win.jpg")));
-    box.setText(QStringLiteral("对方认输了，你获胜！"));
-    box.addButton(QStringLiteral("确定"), QMessageBox::AcceptRole);
-    box.exec();
+    showResultDialog(QStringLiteral("对局结束"), QStringLiteral("对方认输了，你获胜！"),
+                     QStringLiteral(":/res/win.jpg"));
 
     m_network->stop();
 }
@@ -451,6 +480,8 @@ void MainWindow::resetBoard()
     m_gameOver = false;
     m_chess->init();
     m_board->repaintBoard();
+    m_board->clearLastMove();
+    updateTurnLabel();
 }
 
 void MainWindow::checkGameEnd(chess_kind_t lastKind)
@@ -463,7 +494,8 @@ void MainWindow::checkGameEnd(chess_kind_t lastKind)
 
         QMessageBox box(this);
         box.setWindowTitle(QStringLiteral("对局结束"));
-        box.setIconPixmap(QPixmap(iWin ? QStringLiteral(":/res/win.jpg") : QStringLiteral(":/res/lose.jpg")));
+        const QPixmap pm(iWin ? QStringLiteral(":/res/win.jpg") : QStringLiteral(":/res/lose.jpg"));
+        box.setIconPixmap(pm.scaled(220, 220, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         box.setText(iWin ? QStringLiteral("你赢了！") : QStringLiteral("你输了！"));
         QPushButton* again = box.addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
         box.addButton(QStringLiteral("退出"), QMessageBox::RejectRole);
@@ -547,4 +579,148 @@ bool MainWindow::myTurn() const
 chess_kind_t MainWindow::opponentKind() const
 {
     return (m_myKind == CHESS_BLACK) ? CHESS_WHITE : CHESS_BLACK;
+}
+
+void MainWindow::updateTurnLabel()
+{
+    if (!m_connected)
+    {
+        m_turnLabel->setText(QStringLiteral("未连接 · 点击「联机对战」输入密码配对"));
+        m_turnLabel->setStyleSheet(
+            QStringLiteral("font-size: 15px; color: #757575; padding: 3px;"));
+        return;
+    }
+    if (m_gameOver)
+    {
+        m_turnLabel->setText(QStringLiteral("对局结束"));
+        m_turnLabel->setStyleSheet(
+            QStringLiteral("font-size: 15px; font-weight: bold; color: #b26a00; padding: 3px;"));
+        return;
+    }
+    const bool black = (m_myKind == CHESS_BLACK);
+    if (myTurn())
+    {
+        m_turnLabel->setText(QStringLiteral("● 轮到你落子（%1）").arg(black ? QStringLiteral("黑") : QStringLiteral("白")));
+        m_turnLabel->setStyleSheet(
+            QStringLiteral("font-size: 16px; font-weight: bold; color: #2e7d32; padding: 3px;"));
+    }
+    else
+    {
+        m_turnLabel->setText(QStringLiteral("○ 等待对方落子…"));
+        m_turnLabel->setStyleSheet(
+            QStringLiteral("font-size: 16px; font-weight: bold; color: #9e9e9e; padding: 3px;"));
+    }
+}
+
+void MainWindow::showResultDialog(const QString& title, const QString& text, const QString& imagePath)
+{
+    QMessageBox box(this);
+    box.setWindowTitle(title);
+    const QPixmap pm(imagePath);
+    if (!pm.isNull())
+    {
+        // 897×895 大图缩小到 220px，避免弹窗撑满屏幕
+        box.setIconPixmap(pm.scaled(220, 220, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+    box.setText(text);
+    box.addButton(QStringLiteral("关闭"), QMessageBox::AcceptRole);
+    box.exec();
+}
+
+// ---- OTA 更新 ----
+
+void MainWindow::onCheckUpdateClicked()
+{
+    m_updateBtn->setEnabled(false);
+    setStatus(QStringLiteral("正在检查更新…"));
+    m_updater->checkForUpdate();
+}
+
+void MainWindow::onUpdateAvailable(const QString& version, const QString& assetName, const QString& url)
+{
+    m_updateBtn->setEnabled(true);
+    const auto reply = QMessageBox::question(
+        this, QStringLiteral("发现新版本"),
+        QStringLiteral("发现新版本 v%1（当前 v%2）\n\n%3\n\n是否下载并更新？")
+            .arg(version, QCoreApplication::applicationVersion(), assetName),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
+    if (reply != QMessageBox::Yes)
+    {
+        setStatus(QStringLiteral("已取消更新"));
+        return;
+    }
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    QDir().mkpath(dir);
+    m_updater->download(url, dir);
+    setStatus(QStringLiteral("正在下载更新…"));
+}
+
+void MainWindow::onUpToDate(const QString& version)
+{
+    m_updateBtn->setEnabled(true);
+    QMessageBox::information(this, QStringLiteral("检查更新"),
+                             QStringLiteral("已是最新版本 v%1").arg(version));
+    setStatus(QStringLiteral("已是最新版本"));
+}
+
+void MainWindow::onCheckFailed(const QString& reason)
+{
+    m_updateBtn->setEnabled(true);
+    QMessageBox::warning(this, QStringLiteral("检查更新失败"), reason);
+    setStatus(QStringLiteral("检查更新失败"));
+}
+
+void MainWindow::onDownloadProgress(qint64 received, qint64 total)
+{
+    if (total > 0)
+    {
+        const int pct = static_cast<int>(received * 100 / total);
+        setStatus(QStringLiteral("正在下载更新… %1%").arg(pct));
+    }
+}
+
+void MainWindow::onDownloadFinished(const QString& filePath)
+{
+    m_updateBtn->setEnabled(true);
+    setStatus(QStringLiteral("更新包已下载：") + filePath);
+
+#if defined(Q_OS_WIN)
+    // Windows：自动解压 + 覆盖脚本（主进程退出后 xcopy 新文件，再重启）
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString updDir = appDir + QStringLiteral("/updates");
+    QDir().mkpath(updDir + QStringLiteral("/extracted"));
+
+    QProcess::execute(QStringLiteral("powershell"),
+                      {QStringLiteral("-NoProfile"), QStringLiteral("-Command"),
+                       QStringLiteral("Expand-Archive -Force -LiteralPath '%1' -DestinationPath '%2'")
+                           .arg(filePath, updDir + QStringLiteral("/extracted"))});
+
+    QFile batFile(updDir + QStringLiteral("/update.bat"));
+    if (batFile.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QTextStream ts(&batFile);
+        ts << "@echo off\r\n"
+           << "timeout /t 2 /nobreak >nul\r\n"
+           << "xcopy /y /e /q \"" << updDir << "\\extracted\\*\" \"" << appDir << "\\\"\r\n"
+           << "start \"\" \"" << appDir << "\\gomoku-ai.exe\"\r\n"
+           << "del /q \"" << updDir << "\\update.bat\"\r\n";
+        batFile.close();
+    }
+    QProcess::startDetached(updDir + QStringLiteral("/update.bat"));
+    close();
+#else
+    // macOS/Linux：运行中的程序无法自覆盖，引导用户解压覆盖
+    QMessageBox::information(
+        this, QStringLiteral("更新"),
+        QStringLiteral("更新包已下载到：\n%1\n\n请退出程序后，解压并覆盖原安装目录中的文件。")
+            .arg(filePath));
+#endif
+}
+
+void MainWindow::onDownloadFailed(const QString& reason)
+{
+    m_updateBtn->setEnabled(true);
+    QMessageBox::warning(this, QStringLiteral("下载失败"),
+                         QStringLiteral("更新包下载失败：%1").arg(reason));
+    setStatus(QStringLiteral("下载失败"));
 }

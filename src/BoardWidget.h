@@ -17,6 +17,20 @@ public:
     void setChess(Chess* chess) { m_chess = chess; }
     void repaintBoard() { update(); }
 
+    // 最后一手高亮（红点标记），落子后调用；悔棋/重开用 clearLastMove 清除
+    void setLastMove(int row, int col)
+    {
+        m_lastRow = row;
+        m_lastCol = col;
+        update();
+    }
+    void clearLastMove()
+    {
+        m_lastRow = -1;
+        m_lastCol = -1;
+        update();
+    }
+
     // 换肤：设置背景图（任意尺寸，绘制时等比缩放铺满），qrc 路径或本地文件
     void setBackground(const QString& imagePath);
 
@@ -38,4 +52,6 @@ private:
     QPixmap m_boardBg;
     QPixmap m_blackPiece;
     QPixmap m_whitePiece;
+    int m_lastRow = -1;  // 最后一手高亮（-1 = 无）
+    int m_lastCol = -1;
 };

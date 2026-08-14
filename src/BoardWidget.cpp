@@ -69,6 +69,23 @@ void BoardWidget::paintEvent(QPaintEvent* /*event*/)
     }
 
     painter.restore();
+
+    // 最后一手红点标记（画在棋子上方中心，随 scale 缩放）
+    if (m_chess && m_lastRow >= 0 && m_lastCol >= 0)
+    {
+        const int gradeSize = m_chess->getGradeSize();
+        if (m_lastRow < gradeSize && m_lastCol < gradeSize)
+        {
+            painter.save();
+            painter.scale(scale, scale);
+            painter.setBrush(QColor(230, 40, 40));
+            painter.setPen(Qt::NoPen);
+            const float x = m_chess->getMarginX() + m_chess->getChessSize() * m_lastCol;
+            const float y = m_chess->getMarginY() + m_chess->getChessSize() * m_lastRow;
+            painter.drawEllipse(QPointF(x, y), 3.5f, 3.5f);
+            painter.restore();
+        }
+    }
 }
 
 void BoardWidget::mousePressEvent(QMouseEvent* event)
