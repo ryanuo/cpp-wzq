@@ -5,6 +5,9 @@
         <file alias="board_xq_jade.png">res/board_xq_jade.png</file>
         <file alias="board_xq_pink.png">res/board_xq_pink.png</file>
         <file alias="board_xq_redwood.png">res/board_xq_redwood.png</file>
+        <!-- 选中框素材：r_box 红环（70×70, 内容 53px）/ b_box 黑环（38×38, 满铺） -->
+        <file alias="pieces/r_box.png">res/pieces/r_box.png</file>
+        <file alias="pieces/b_box.png">res/pieces/b_box.png</file>
         <!-- 棋子皮肤 1（54×54 PNG 透明，r_=红方 b_=黑方，c车 j将 m马 p炮 s士 x相 z兵/卒） -->
         <file alias="pieces/stype_1/r_c.png">res/pieces/stype_1/r_c.png</file>
         <file alias="pieces/stype_1/r_j.png">res/pieces/stype_1/r_j.png</file>

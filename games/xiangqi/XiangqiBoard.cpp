@@ -8,6 +8,8 @@ XiangqiBoard::XiangqiBoard(QWidget* parent)
 {
     setMinimumSize(400, 400);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_selBoxRed.load(QStringLiteral(":/res/pieces/r_box.png"));
+    m_selBoxBlack.load(QStringLiteral(":/res/pieces/b_box.png"));
 }
 
 // 交叉点坐标（逻辑 600 系）：图片模式按图片网格校准，程序模式用固定边距/格距
@@ -147,13 +149,33 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
         }
     }
 
-    // 选中高亮（最上层）
+    // 选中高亮（最上层）：按棋子阵营选框（红子 r_box 红环 / 黑子 b_box 黑环）
+    // 素材 58×58 画布, 内容 53px 圆环; 框直径 = 棋子直径 + 4px 余量（套住效果）
     if (m_selRow >= 0 && m_selCol >= 0)
     {
         const QPointF p = cellPoint(m_selRow, m_selCol);
-        painter.setPen(QPen(QColor(230, 40, 40), 3));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(p, 26, 26);
+        const int piece = m_chess ? m_chess->pieceAt(m_selRow, m_selCol) : PIECE_NONE;
+        const bool red = (piece == PIECE_NONE) || XiangqiChess::pieceBelongs(piece, true);
+        const QPixmap& box = red ? m_selBoxRed : m_selBoxBlack;
+        const int pieceRadius = 26;  // 棋子半径统一 26（直径 52px），与 drawPiece 一致
+        if (!box.isNull())
+        {
+            const qreal content = 53.0;   // 素材圆环直径（r_box/b_box 同为 53px）
+            const qreal target = pieceRadius * 2 + 4.0;  // 棋子直径 + 4px 余量
+            const qreal s = box.width() * (target / content);
+            painter.save();
+            painter.translate(p);
+            painter.drawPixmap(QRectF(-s / 2, -s / 2, s, s), box,
+                               QRectF(0, 0, box.width(), box.height()));
+            painter.restore();
+        }
+        else
+        {
+            // 素材缺失回退：红色椭圆圈（直径 = 棋子直径 + 4px 余量，与素材分支一致）
+            painter.setPen(QPen(QColor(230, 40, 40), 3));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawEllipse(p, pieceRadius + 2, pieceRadius + 2);
+        }
     }
     // 最后一手标记
     if (m_lastRow >= 0 && m_lastCol >= 0)
@@ -211,8 +233,8 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
 {
     const QPointF p = cellPoint(row, col);
     const bool red = XiangqiChess::pieceBelongs(piece, true);
-    // 半径按模式自适应：图片底图行距 50.4（逻辑）< 程序模式 60，防棋子压相邻行
-    const int radius = m_boardBg.isNull() ? 25 : 22;
+    // 棋子直径统一 52px（radius 26）：图片/程序模式一致，选中框无需两套尺寸
+    const int radius = 26;
 
     // 图片棋子皮肤（54×54 原图缩放到棋子直径；对方棋子旋转 180° 保持文字物理朝向）
     if (!m_pieceSkin.isEmpty())

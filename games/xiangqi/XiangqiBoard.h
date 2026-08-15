@@ -58,6 +58,8 @@ private:
     void drawPiece(QPainter& painter, int row, int col, int piece);
     QPixmap piecePixmap(int piece);      // 图片皮肤：取棋子图（按枚举缓存）
     QString pieceImagePath(int piece);   // 图片皮肤：棋子枚举 -> 资源路径（按当前皮肤目录）
+    QPixmap m_selBoxRed;                 // 红方选中框（r_box: 70×70, 内容 53px 红环）
+    QPixmap m_selBoxBlack;               // 黑方选中框（b_box: 38×38, 满铺黑环）
 
     XiangqiChess* m_chess = nullptr;
     QPixmap m_boardBg;   // 棋盘底图（非空时优先于程序绘制）
