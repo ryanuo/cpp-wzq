@@ -768,11 +768,11 @@ jobs:
             # 诊断: 打印 201 响应体（字段名以实际响应为准）
             echo "upload-url 响应: $(head -c 300 /tmp/cnb_upload.json)"
 
+            # 响应字段: upload_url(PUT 地址) + verify_url(完整确认地址, 含 token 与编码路径)
             UPLOAD_URL=$(jget /tmp/cnb_upload.json upload_url || true)
-            UPLOAD_TOKEN=$(jget /tmp/cnb_upload.json upload_token || true)
-            ASSET_PATH=$(jget /tmp/cnb_upload.json asset_path || true)
-            if [ -z "$UPLOAD_URL" ] || [ -z "$UPLOAD_TOKEN" ] || [ -z "$ASSET_PATH" ]; then
-              echo "::error::上传地址响应缺字段, 响应: $(head -c 500 /tmp/cnb_upload.json)"
+            VERIFY_URL=$(jget /tmp/cnb_upload.json verify_url || true)
+            if [ -z "$UPLOAD_URL" ] || [ -z "$VERIFY_URL" ]; then
+              echo "::error::上传地址响应缺字段(upload_url/verify_url), 响应: $(head -c 500 /tmp/cnb_upload.json)"
               exit 1
             fi
 
@@ -786,8 +786,7 @@ jobs:
             fi
 
             HTTP=$(curl -s -o /tmp/cnb_confirm.json -w "%{http_code}" -H "$AUTH" \
-              -H "Accept: application/json" -X POST \
-              "$API/${RELEASE_ID}/asset-upload-confirmation/${UPLOAD_TOKEN}/${ASSET_PATH}" || true)
+              -H "Accept: application/json" -X POST "$VERIFY_URL" || true)
             echo "POST confirm: HTTP ${HTTP}"
             if [ "$HTTP" != "200" ]; then
               echo "::error::确认上传失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_confirm.json)"
