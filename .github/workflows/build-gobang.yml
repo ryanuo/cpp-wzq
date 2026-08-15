@@ -727,8 +727,10 @@ jobs:
           }
 
           # 1. 按 tag 取 release_id（|| true: 即使 curl 失败也要拿到状态码）
+          # Accept: application/json 必须加 —— CNB 对 curl 默认 Accept: */* 返回 406
           HTTP=$(curl -s -o /tmp/cnb_release.json -w "%{http_code}" \
-            -H "$AUTH" "$API/tags/${CNB_TAG}" || true)
+            -H "$AUTH" -H "Accept: application/json" \
+            "$API/tags/${CNB_TAG}" || true)
           echo "GET release by tag: HTTP ${HTTP}"
           if [ "$HTTP" != "200" ]; then
             echo "::error::取 release 失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_release.json)"
@@ -748,6 +750,7 @@ jobs:
             echo "== 上传 ${NAME} (${SIZE} bytes) =="
 
             HTTP=$(curl -s -o /tmp/cnb_upload.json -w "%{http_code}" -H "$AUTH" \
+              -H "Accept: application/json" \
               -H "Content-Type: application/json" \
               -d "{\"asset_name\":\"${NAME}\",\"size\":${SIZE},\"overwrite\":true}" \
               "$API/${RELEASE_ID}/asset-upload-url" || true)
@@ -774,7 +777,8 @@ jobs:
               exit 1
             fi
 
-            HTTP=$(curl -s -o /tmp/cnb_confirm.json -w "%{http_code}" -H "$AUTH" -X POST \
+            HTTP=$(curl -s -o /tmp/cnb_confirm.json -w "%{http_code}" -H "$AUTH" \
+              -H "Accept: application/json" -X POST \
               "$API/${RELEASE_ID}/asset-upload-confirmation/${UPLOAD_TOKEN}/${ASSET_PATH}" || true)
             echo "POST confirm: HTTP ${HTTP}"
             if [ "$HTTP" != "200" ]; then
