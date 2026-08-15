@@ -110,8 +110,9 @@ GameWindow::GameWindow(const QString& title, QWidget* parent)
     connect(m_network, &NetworkManager::surrendered, this, &GameWindow::onSurrendered);
     connect(m_network, &NetworkManager::disconnected, this, &GameWindow::onDisconnected);
 
-    // OTA 更新
-    m_updater = new UpdateChecker(this);
+    // OTA 更新（通用组件：仓库名 + 资产前缀，新应用接入只改这一行）
+    m_updater = new UpdateChecker(QStringLiteral("ryanuo/cpp-wzq"),
+                                  QStringLiteral("gobang-"), this);
     connect(m_updater, &UpdateChecker::updateAvailable, this, &GameWindow::onUpdateAvailable);
     connect(m_updater, &UpdateChecker::upToDate, this, &GameWindow::onUpToDate);
     connect(m_updater, &UpdateChecker::checkFailed, this, &GameWindow::onCheckFailed);

@@ -12,21 +12,14 @@
 #include <QUrl>
 
 namespace {
-constexpr auto kApiUrl =
-    "https://api.github.com/repos/ryanuo/cpp-wzq/releases/latest";
-constexpr auto kReleasePage =
-    "https://github.com/ryanuo/cpp-wzq/releases/latest";
-
-// GitHub 加速镜像（国内直连慢，优先走镜像；按实测可用性排序）
-// 镜像可用性波动大（第三方服务），按需增删；全部失败后兜底官方直连（慢但可用）
-const char* kMirrorPrefixes[] = {
-    "https://gh-proxy.com/",   // 0: 首选（实测 200）
-    "https://ghfast.top/",     // 1: 当前 403, 可能恢复
-    "https://ghproxy.net/",    // 2: 当前 403, 可能恢复
-};
-constexpr int kMirrorCount = 3;
+// OTA 优先走自建 Cloudflare Worker（ota.ryanuo.cc，国内可缓存加速），失败兜底 GitHub 官方直连
+// 新应用接入：改 GameWindow.cpp 里 UpdateChecker 构造参数 + Worker 环境变量 ALLOWED_REPOS
+constexpr auto kWorkerOrigin = "https://ota.ryanuo.cc";  // Cloudflare Worker
+constexpr auto kApiOrigin = "https://api.github.com";    // GitHub API（官方兜底）
+constexpr auto kReleaseOrigin = "https://github.com";    // GitHub 下载（官方兜底）
+constexpr int kMirrorCount = 1;  // 镜像数（当前只有 Worker 一个）
 constexpr int kTotalSources = kMirrorCount + 1;  // 镜像 + 官方直连兜底
-constexpr int kCheckTimeoutMs = 10000;  // 检查请求超时
+constexpr int kCheckTimeoutMs = 10000;   // 检查请求超时
 constexpr int kDownloadTimeoutMs = 30000; // 下载请求超时
 } // namespace
 
@@ -36,13 +29,41 @@ QString UpdateChecker::mirrorUrl(int index, const QString& rawUrl)
     {
         return rawUrl;  // 官方直连兜底
     }
-    return QString::fromLatin1(kMirrorPrefixes[index]) + rawUrl;
+    // 检查更新 API -> Worker /github-api/
+    const QString apiPrefix = QString::fromLatin1(kApiOrigin) + QLatin1Char('/');
+    if (rawUrl.startsWith(apiPrefix))
+    {
+        return QString::fromLatin1(kWorkerOrigin) + QStringLiteral("/github-api/")
+             + rawUrl.mid(apiPrefix.size());
+    }
+    // Release 资产下载 -> Worker /release/
+    const QString releasePrefix = QString::fromLatin1(kReleaseOrigin) + QLatin1Char('/');
+    if (rawUrl.startsWith(releasePrefix))
+    {
+        return QString::fromLatin1(kWorkerOrigin) + QStringLiteral("/release/")
+             + rawUrl.mid(releasePrefix.size());
+    }
+    return rawUrl;  // 其他域名（如自建源）不重写
 }
 
-UpdateChecker::UpdateChecker(QObject* parent)
+UpdateChecker::UpdateChecker(const QString& repoPath, const QString& assetPrefix,
+                             QObject* parent)
     : QObject(parent)
+    , m_repoPath(repoPath)
+    , m_assetPrefix(assetPrefix)
 {
     m_nam = new QNetworkAccessManager(this);
+}
+
+QString UpdateChecker::apiUrl() const
+{
+    return QStringLiteral("https://api.github.com/repos/%1/releases/latest")
+        .arg(m_repoPath);
+}
+
+QString UpdateChecker::releasePage() const
+{
+    return QStringLiteral("https://github.com/%1/releases/latest").arg(m_repoPath);
 }
 
 bool UpdateChecker::versionGreater(const QString& a, const QString& b)
@@ -76,18 +97,18 @@ bool UpdateChecker::versionGreater(const QString& a, const QString& b)
     return false; // 相等
 }
 
-QString UpdateChecker::currentAssetName()
+QString UpdateChecker::currentAssetName() const
 {
 #if defined(Q_OS_WIN)
-    return QStringLiteral("gobang-windows-x64.zip");
+    return m_assetPrefix + QStringLiteral("windows-x64.zip");
 #elif defined(Q_OS_MACOS)
-    return QStringLiteral("gobang-macos.zip");
+    return m_assetPrefix + QStringLiteral("macos.zip");
 #else
-    return QStringLiteral("gobang-linux.zip");
+    return m_assetPrefix + QStringLiteral("linux.zip");
 #endif
 }
 
-bool UpdateChecker::assetMatchesCurrentSystem(const QString& assetName)
+bool UpdateChecker::assetMatchesCurrentSystem(const QString& assetName) const
 {
     return assetName == currentAssetName();
 }
@@ -122,11 +143,11 @@ bool UpdateChecker::tryCheckNextMirror(int index)
         // 所有镜像与官方兜底均失败：提示手动下载
         emit checkFailed(QStringLiteral("无法连接更新服务器（已尝试加速镜像与官方源）。\n"
                                         "可手动打开 Releases 页下载：\n")
-                         + QString::fromLatin1(kReleasePage));
+                         + releasePage());
         return false;
     }
     m_checkTried = index;
-    QNetworkRequest req{QUrl(mirrorUrl(index, QString::fromLatin1(kApiUrl)))};
+    QNetworkRequest req{QUrl(mirrorUrl(index, apiUrl()))};
     req.setRawHeader("User-Agent", "gobang-updater");
     req.setRawHeader("Accept", "application/vnd.github+json");
     req.setTransferTimeout(kCheckTimeoutMs);  // 慢网络下快速切换到下一个源
@@ -213,7 +234,7 @@ void UpdateChecker::tryDownloadWithMirror(int index)
     {
         emit downloadFailed(QStringLiteral("下载失败（已尝试加速镜像与官方源）。\n"
                                            "可手动打开 Releases 页下载：\n")
-                            + QString::fromLatin1(kReleasePage));
+                            + releasePage());
         return;
     }
     m_downloadTried = index;

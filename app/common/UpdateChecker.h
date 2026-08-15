@@ -7,12 +7,18 @@ class QNetworkAccessManager;
 class QNetworkReply;
 
 // OTA 更新检查与下载：查询 GitHub Releases 最新版，按系统匹配资产并下载
+// 通用组件：仓库名与资产前缀由构造函数传入，新应用接入只需改一处调用
+//   UpdateChecker updater("ryanuo/cpp-wzq", "gobang-", this);
+// 网络路径：检查/下载优先走 Cloudflare Worker (ota.ryanuo.cc)，失败兜底 GitHub 官方直连
 class UpdateChecker : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit UpdateChecker(QObject* parent = nullptr);
+    // repoPath: GitHub "owner/repo"（如 "ryanuo/cpp-wzq"）
+    // assetPrefix: Release 资产文件名前缀（如 "gobang-" → gobang-windows-x64.zip）
+    explicit UpdateChecker(const QString& repoPath, const QString& assetPrefix,
+                           QObject* parent = nullptr);
 
     // 查询最新 release（async，结果走信号）
     void checkForUpdate();
@@ -21,12 +27,17 @@ public:
 
     // 语义化版本比较：a > b（"0.2.0" > "0.1.9"，可带 v 前缀）
     static bool versionGreater(const QString& a, const QString& b);
-    // 当前系统对应的资产名（gobang-windows-x64.zip / -macos.zip / -linux.zip）
-    static QString currentAssetName();
+    // 当前系统对应的资产名（{prefix}windows-x64.zip / -macos.zip / -linux.zip）
+    QString currentAssetName() const;
     // 资产名是否匹配当前系统
-    static bool assetMatchesCurrentSystem(const QString& assetName);
+    bool assetMatchesCurrentSystem(const QString& assetName) const;
     // 资产名 -> 系统名（用于提示）
     static QString assetPlatformName(const QString& assetName);
+    // 镜像 URL 重写（index < kMirrorCount 走 Worker，否则官方直连）：
+    //   api.github.com/...  -> ota.ryanuo.cc/github-api/...
+    //   github.com/...      -> ota.ryanuo.cc/release/...
+    // 其他域名原样返回（不重写）
+    static QString mirrorUrl(int index, const QString& rawUrl);
 
 signals:
     void updateAvailable(const QString& version, const QString& assetName, const QString& downloadUrl);
@@ -42,13 +53,16 @@ private slots:
     void onDownloadFinished();
 
 private:
+    // 最新 release 的 API / 页面 URL（由 repoPath 拼出）
+    QString apiUrl() const;
+    QString releasePage() const;
     // 按镜像序号尝试检查更新 / 下载（返回是否还有下一个可尝试）
     bool tryCheckNextMirror(int index);
     void tryDownloadWithMirror(int index);
-    // 镜像前缀 + 原始 URL（index=0 为官方直连，不加前缀）
-    static QString mirrorUrl(int index, const QString& rawUrl);
 
     QNetworkAccessManager* m_nam = nullptr;
+    QString m_repoPath;     // "owner/repo"
+    QString m_assetPrefix;  // 资产文件名前缀，如 "gobang-"
     QString m_downloadTarget;   // 当前下载的临时文件路径
     QString m_downloadDestDir;  // 下载目标目录
     QString m_downloadRawUrl;   // 原始下载 URL（未加镜像前缀）

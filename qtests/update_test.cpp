@@ -29,13 +29,31 @@ int main(int argc, char** argv)
     CHECK(UpdateChecker::versionGreater("0.10.0", "0.9.0"));
 
     // ---- 资产匹配 ----
-    const QString current = UpdateChecker::currentAssetName();
-    CHECK(UpdateChecker::assetMatchesCurrentSystem(current));
-    CHECK(!UpdateChecker::assetMatchesCurrentSystem(QStringLiteral("gobang-none.zip")));
+    UpdateChecker updater(QStringLiteral("ryanuo/cpp-wzq"), QStringLiteral("gobang-"));
+    const QString current = updater.currentAssetName();
+    CHECK(updater.assetMatchesCurrentSystem(current));
+    CHECK(!updater.assetMatchesCurrentSystem(QStringLiteral("gobang-none.zip")));
     // 平台名
     CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-windows-x64.zip")) == "Windows");
     CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-macos.zip")) == "macOS");
     CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-linux.zip")) == "Linux");
+
+    // ---- mirrorUrl：Worker 重写 + 官方兜底 ----
+    const QString api =
+        QStringLiteral("https://api.github.com/repos/ryanuo/cpp-wzq/releases/latest");
+    CHECK(UpdateChecker::mirrorUrl(0, api) ==
+          QStringLiteral("https://ota.ryanuo.cc/github-api/repos/ryanuo/cpp-wzq/releases/latest"));
+    const QString asset = QStringLiteral(
+        "https://github.com/ryanuo/cpp-wzq/releases/download/v0.2.0/gobang-windows-x64.zip");
+    CHECK(UpdateChecker::mirrorUrl(0, asset) ==
+          QStringLiteral("https://ota.ryanuo.cc/release/ryanuo/cpp-wzq/"
+                         "releases/download/v0.2.0/gobang-windows-x64.zip"));
+    // 官方兜底（index >= kMirrorCount）原样返回
+    CHECK(UpdateChecker::mirrorUrl(1, api) == api);
+    CHECK(UpdateChecker::mirrorUrl(1, asset) == asset);
+    // 非 GitHub 域名（如自建源）不重写
+    const QString selfHosted = QStringLiteral("https://example.com/pkg.zip");
+    CHECK(UpdateChecker::mirrorUrl(0, selfHosted) == selfHosted);
 
     std::printf("当前系统资产: %s\n", current.toUtf8().constData());
     if (g_failures == 0)
