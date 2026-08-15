@@ -695,3 +695,5 @@ jobs:
           PLUGIN_ATTACHMENTS: dist/gobang-windows-x64.zip,dist/gobang-macos.zip,dist/gobang-linux.zip
           PLUGIN_TOKEN: ${{ secrets.GIT_PASSWORD }}
           PLUGIN_ENDPOINT: "https://api.cnb.cool"
+          # GitHub Actions 里跑非 CNB 流水线触发，必须显式指定目标仓库 slug
+          PLUGIN_SLUG: "ryanuo/cpp-wzq"
