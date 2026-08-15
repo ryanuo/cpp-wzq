@@ -23,7 +23,8 @@ public:
     // 查询最新 release（async，结果走信号）
     void checkForUpdate();
     // 下载指定资产到 destDir（async，进度/完成走信号）
-    void download(const QString& url, const QString& destDir);
+    // expectedSize: API 返回的资产字节数（>0 时下载完成后校验，防止坏文件进安装流程）
+    void download(const QString& url, const QString& destDir, qint64 expectedSize = -1);
 
     // 语义化版本比较：a > b（"0.2.0" > "0.1.9"，可带 v 前缀）
     static bool versionGreater(const QString& a, const QString& b);
@@ -38,7 +39,8 @@ public:
     static QString mirrorUrl(int index, const QString& rawUrl);
 
 signals:
-    void updateAvailable(const QString& version, const QString& assetName, const QString& downloadUrl);
+    void updateAvailable(const QString& version, const QString& assetName,
+                         const QString& downloadUrl, qint64 size);
     void upToDate(const QString& version);          // 已是最新
     void checkFailed(const QString& reason);
     void downloadProgress(qint64 received, qint64 total);
@@ -63,5 +65,6 @@ private:
     QString m_downloadTarget;   // 当前下载的临时文件路径
     QString m_downloadDestDir;  // 下载目标目录
     QString m_downloadRawUrl;   // 原始下载 URL（未加镜像前缀）
+    qint64 m_downloadExpectedSize = -1;  // 期望文件大小（API 返回，下载后校验）
     int m_downloadTried = 0;    // 下载已尝试的镜像数
 };

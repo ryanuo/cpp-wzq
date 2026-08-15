@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -180,6 +181,7 @@ void UpdateChecker::onReleaseReplyFinished()
     // 匹配当前系统资产
     QString assetName;
     QString assetUrl;
+    qint64 assetSize = -1;
     const QJsonArray assets = root.value(QStringLiteral("assets")).toArray();
     for (const QJsonValue& v : assets)
     {
@@ -189,6 +191,7 @@ void UpdateChecker::onReleaseReplyFinished()
         {
             assetName = name;
             assetUrl = a.value(QStringLiteral("browser_download_url")).toString();
+            assetSize = a.value(QStringLiteral("size")).toVariant().toLongLong();
             break;
         }
     }
@@ -203,7 +206,7 @@ void UpdateChecker::onReleaseReplyFinished()
         }
         else
         {
-            emit updateAvailable(tagName, assetName, assetUrl);
+            emit updateAvailable(tagName, assetName, assetUrl, assetSize);
         }
     }
     else
@@ -212,14 +215,20 @@ void UpdateChecker::onReleaseReplyFinished()
     }
 }
 
-void UpdateChecker::download(const QString& url, const QString& destDir)
+void UpdateChecker::download(const QString& url, const QString& destDir,
+                             qint64 expectedSize)
 {
     m_downloadDestDir = destDir;
     m_downloadRawUrl = url;
+    m_downloadExpectedSize = expectedSize;
     const QString fileName = url.mid(url.lastIndexOf(QLatin1Char('/')) + 1);
     m_downloadTarget = destDir + QLatin1Char('/') + fileName;
 
-    // 下载走镜像（大文件），从第一个镜像开始，失败依次切换，最后官方兜底
+    // 清理下载目录的旧文件：上次失败/中断可能残留坏 zip（大小不符），
+    // 不删会导致本次下载与旧文件冲突、或误用旧文件
+    QFile::remove(m_downloadTarget);
+
+    // 从第一个镜像开始下载；失败依次切换，最后官方兜底
     m_downloadTried = 0;
     tryDownloadWithMirror(0);
 }
@@ -276,6 +285,19 @@ void UpdateChecker::onDownloadFinished()
         {
             file.write(reply->readAll());
             file.close();
+        }
+        // 大小校验：与 API 返回的资产 size 对比，防止坏文件进安装流程
+        if (m_downloadExpectedSize > 0)
+        {
+            const qint64 actual = QFileInfo(m_downloadTarget).size();
+            if (actual != m_downloadExpectedSize)
+            {
+                QFile::remove(m_downloadTarget);
+                emit downloadFailed(QStringLiteral("更新包下载不完整（%1/%2 字节），请重试")
+                                        .arg(actual)
+                                        .arg(m_downloadExpectedSize));
+                return;
+            }
         }
         emit downloadFinished(m_downloadTarget);
     }

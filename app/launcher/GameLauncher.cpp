@@ -225,7 +225,7 @@ void GameLauncher::onAboutClicked()
 // ---- OTA 更新 ----
 
 void GameLauncher::onUpdateAvailable(const QString& version, const QString& assetName,
-                                     const QString& url)
+                                     const QString& url, qint64 size)
 {
     m_updateAct->setEnabled(true);
     const auto reply = QMessageBox::question(
@@ -240,7 +240,7 @@ void GameLauncher::onUpdateAvailable(const QString& version, const QString& asse
     }
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
     QDir().mkpath(dir);
-    m_updater->download(url, dir);
+    m_updater->download(url, dir, size);
     statusBar()->showMessage(QStringLiteral("正在下载更新…"));
 }
 

@@ -24,7 +24,8 @@ private slots:
     void onCheckUpdateClicked();
     void onAboutClicked();
     // OTA（UpdateChecker 信号）
-    void onUpdateAvailable(const QString& version, const QString& assetName, const QString& url);
+    void onUpdateAvailable(const QString& version, const QString& assetName,
+                           const QString& url, qint64 size);
     void onUpToDate(const QString& version);
     void onCheckFailed(const QString& reason);
     void onDownloadProgress(qint64 received, qint64 total);

@@ -602,7 +602,8 @@ void GameWindow::onCheckUpdateClicked()
     m_updater->checkForUpdate();
 }
 
-void GameWindow::onUpdateAvailable(const QString& version, const QString& assetName, const QString& url)
+void GameWindow::onUpdateAvailable(const QString& version, const QString& assetName,
+                                   const QString& url, qint64 size)
 {
     m_updateAct->setEnabled(true);
     const auto reply = QMessageBox::question(
@@ -617,7 +618,7 @@ void GameWindow::onUpdateAvailable(const QString& version, const QString& assetN
     }
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
     QDir().mkpath(dir);
-    m_updater->download(url, dir);
+    m_updater->download(url, dir, size);
     setStatus(QStringLiteral("正在下载更新…"));
 }
 

@@ -17,6 +17,8 @@ void UpdateInstaller::install(const QString& filePath, QWidget* parent)
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString updDir = appDir + QStringLiteral("/updates");
     const QString extractDir = updDir + QStringLiteral("/extracted");
+    // 清理上次残留：解压中断/失败留下的文件会让 Expand-Archive 反复失败（互相踩）
+    QDir(extractDir).removeRecursively();
     QDir().mkpath(extractDir);
 
     QProcess::execute(QStringLiteral("powershell"),
@@ -43,13 +45,19 @@ void UpdateInstaller::install(const QString& filePath, QWidget* parent)
            << "goto waitproc\r\n"
            << ":copystart\r\n"
            << "echo %date% %time% wait done retry=%n% >> \"%LOG%\"\r\n"
-           // 解压失败检测：extracted 无 exe 则跳过复制（保留旧版）
+           // 解压失败检测：extracted 无 exe 则跳过复制（保留旧版）+ 弹窗提示原因
            << "if not exist \"" << extractDir << "\\gobang.exe\" (\r\n"
            << "  echo %date% %time% ERROR: extracted gobang.exe missing, unzip failed >> \"%LOG%\"\r\n"
+           << "  start \"\" powershell -NoProfile -Command \"Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('更新包解压失败，请重新检查更新。','Gobang 更新')\"\r\n"
            << "  goto cleanup\r\n"
            << ")\r\n"
            << "xcopy /y /r /e /q \"" << extractDir << "\\*\" \"" << appDir << "\\\" >> \"%LOG%\" 2>&1\r\n"
            << "echo %date% %time% xcopy exit=%errorlevel% >> \"%LOG%\"\r\n"
+           // 覆盖失败（权限/文件占用）：弹窗提示，不再启动旧 exe（避免"更新了但版本没变"）
+           << "if errorlevel 1 (\r\n"
+           << "  start \"\" powershell -NoProfile -Command \"Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('更新文件复制失败，请检查目录权限后重试。','Gobang 更新')\"\r\n"
+           << "  goto cleanup\r\n"
+           << ")\r\n"
            << "start \"\" \"" << appDir << "\\gobang.exe\"\r\n"
            << "echo %date% %time% relaunch issued >> \"%LOG%\"\r\n"
            << ":cleanup\r\n"
