@@ -724,10 +724,16 @@ jobs:
           }
 
           # 1. 按 tag 取 release_id
-          curl -sf -H "$AUTH" "$API/tags/${CNB_TAG}" -o /tmp/cnb_release.json
+          HTTP=$(curl -s -o /tmp/cnb_release.json -w "%{http_code}" -H "$AUTH" \
+            "$API/tags/${CNB_TAG}")
+          echo "GET release by tag: HTTP ${HTTP}"
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::取 release 失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_release.json)"
+            exit 1
+          fi
           RELEASE_ID=$(jget /tmp/cnb_release.json id)
           if [ -z "$RELEASE_ID" ]; then
-            echo "::error::未取到 release_id, 响应: $(cat /tmp/cnb_release.json | head -c 500)"
+            echo "::error::未取到 release_id, 响应: $(head -c 500 /tmp/cnb_release.json)"
             exit 1
           fi
           echo "release_id=${RELEASE_ID} (tag=${CNB_TAG})"
@@ -738,27 +744,39 @@ jobs:
             SIZE=$(stat -c%s "$f")
             echo "== 上传 ${NAME} (${SIZE} bytes) =="
 
-            curl -sf -H "$AUTH" -H "Content-Type: application/json" \
+            HTTP=$(curl -s -o /tmp/cnb_upload.json -w "%{http_code}" -H "$AUTH" \
+              -H "Content-Type: application/json" \
               -d "{\"asset_name\":\"${NAME}\",\"size\":${SIZE},\"overwrite\":true}" \
-              "$API/${RELEASE_ID}/asset-upload-url" -o /tmp/cnb_upload.json
+              "$API/${RELEASE_ID}/asset-upload-url")
+            echo "POST asset-upload-url: HTTP ${HTTP}"
+            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
+              echo "::error::取上传地址失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_upload.json)"
+              exit 1
+            fi
 
             UPLOAD_URL=$(jget /tmp/cnb_upload.json upload_url)
             UPLOAD_TOKEN=$(jget /tmp/cnb_upload.json upload_token)
             ASSET_PATH=$(jget /tmp/cnb_upload.json asset_path)
             if [ -z "$UPLOAD_URL" ] || [ -z "$UPLOAD_TOKEN" ] || [ -z "$ASSET_PATH" ]; then
-              echo "::error::上传地址响应缺字段, 响应: $(cat /tmp/cnb_upload.json | head -c 500)"
+              echo "::error::上传地址响应缺字段, 响应: $(head -c 500 /tmp/cnb_upload.json)"
               exit 1
             fi
 
-            curl -sf -X PUT --data-binary @"$f" \
-              -H "Content-Type: application/octet-stream" "$UPLOAD_URL"
+            HTTP=$(curl -s -o /tmp/cnb_put.json -w "%{http_code}" -X PUT \
+              --data-binary @"$f" -H "Content-Type: application/octet-stream" "$UPLOAD_URL")
+            echo "PUT upload: HTTP ${HTTP}"
+            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
+              echo "::error::PUT 上传失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_put.json)"
+              exit 1
+            fi
 
-            curl -sf -H "$AUTH" -X POST \
-              "$API/${RELEASE_ID}/asset-upload-confirmation/${UPLOAD_TOKEN}/${ASSET_PATH}" \
-              -o /tmp/cnb_confirm.json || {
-                echo "::error::确认上传失败, 响应: $(cat /tmp/cnb_confirm.json 2>/dev/null | head -c 500)"
-                exit 1
-              }
+            HTTP=$(curl -s -o /tmp/cnb_confirm.json -w "%{http_code}" -H "$AUTH" -X POST \
+              "$API/${RELEASE_ID}/asset-upload-confirmation/${UPLOAD_TOKEN}/${ASSET_PATH}")
+            echo "POST confirm: HTTP ${HTTP}"
+            if [ "$HTTP" != "200" ]; then
+              echo "::error::确认上传失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_confirm.json)"
+              exit 1
+            fi
 
             echo "已上传: ${NAME}"
           done
