@@ -7,5 +7,7 @@
         <file alias="bg.mp3">res/bg.mp3</file>
         <file alias="win.mp3">res/win.mp3</file>
         <file alias="lose.mp3">res/lose.mp3</file>
+        <!-- 应用图标（窗口/任务栏，main.cpp setWindowIcon 加载 :/res/icon.png） -->
+        <file alias="icon.png">../icon/gobang-1024.png</file>
     </qresource>
 </RCC>

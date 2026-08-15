@@ -63,6 +63,18 @@ set_target_properties(gobang PROPERTIES
 )
 
 # ============================================================
+# 应用图标
+#   macOS: .icns 放进 bundle Resources + Info.plist 引用（CFBundleIconFile）
+#   Windows: .ico 嵌入 exe 资源（RC_ICONS 自动生成 .rc）
+#   窗口/任务栏: gobang-1024.png 经 resource.qrc 以 :/res/icon.png 加载（main.cpp setWindowIcon）
+# 重新生成: python3 scripts/make-icons.py（Pillow + iconutil）
+# ============================================================
+target_sources(gobang PRIVATE app/icon/gobang.icns)
+set_source_files_properties(app/icon/gobang.icns PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+set_target_properties(gobang PROPERTIES MACOSX_BUNDLE_ICON_FILE gobang.icns)
+set_target_properties(gobang PROPERTIES RC_ICONS "${CMAKE_CURRENT_SOURCE_DIR}/app/icon/gobang.ico")
+
+# ============================================================
 # 测试
 # ============================================================
 enable_testing()
