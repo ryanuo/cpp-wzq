@@ -9,7 +9,7 @@ class QNetworkReply;
 // OTA 更新检查与下载：查询 GitHub Releases 最新版，按系统匹配资产并下载
 // 通用组件：仓库名与资产前缀由构造函数传入，新应用接入只需改一处调用
 //   UpdateChecker updater("ryanuo/cpp-wzq", "gobang-", this);
-// 网络路径：检查/下载优先走 Cloudflare Worker (ota.ryanuo.cc)，失败兜底 GitHub 官方直连
+// 网络路径：检查/下载优先走 GitHub 加速镜像（kMirrorPrefixes 可配置列表），失败兜底官方直连
 class UpdateChecker : public QObject
 {
     Q_OBJECT
@@ -33,10 +33,8 @@ public:
     bool assetMatchesCurrentSystem(const QString& assetName) const;
     // 资产名 -> 系统名（用于提示）
     static QString assetPlatformName(const QString& assetName);
-    // 镜像 URL 重写（index < kMirrorCount 走 Worker，否则官方直连）：
-    //   api.github.com/...  -> ota.ryanuo.cc/github-api/...
-    //   github.com/...      -> ota.ryanuo.cc/release/...
-    // 其他域名原样返回（不重写）
+    // 镜像 URL 重写（index < kMirrorCount 走镜像前缀，否则官方直连）：
+    //   前缀拼接：kMirrorPrefixes[index] + 原始 URL（镜像需同时支持 API 与 Release 下载）
     static QString mirrorUrl(int index, const QString& rawUrl);
 
 signals:
@@ -56,8 +54,7 @@ private:
     // 最新 release 的 API / 页面 URL（由 repoPath 拼出）
     QString apiUrl() const;
     QString releasePage() const;
-    // 按镜像序号尝试检查更新 / 下载（返回是否还有下一个可尝试）
-    bool tryCheckNextMirror(int index);
+    // 按镜像序号尝试下载（失败依次切换，最后官方直连兜底）
     void tryDownloadWithMirror(int index);
 
     QNetworkAccessManager* m_nam = nullptr;
@@ -66,7 +63,5 @@ private:
     QString m_downloadTarget;   // 当前下载的临时文件路径
     QString m_downloadDestDir;  // 下载目标目录
     QString m_downloadRawUrl;   // 原始下载 URL（未加镜像前缀）
-    int m_checkTried = 0;       // 检查更新已尝试的镜像数
-    int m_mirrorIndex = 0;      // 最近一次成功的镜像（检查成功后记录，下载沿用）
     int m_downloadTried = 0;    // 下载已尝试的镜像数
 };

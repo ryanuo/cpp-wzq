@@ -20,7 +20,7 @@
 | 🔄 再来一局 | 需对方同意（RESTART_REQ/OK/NO），拒绝则保留局面 |
 | 🏳 认输 | 对局中点「认输」或「新游戏」均视为认输；对方断开视为认输 |
 | 🔊 音效与背景乐 | 落子/开始/胜负音效 + 循环背景乐（两游戏共享） |
-| 🚀 OTA 自动更新 | 检查更新走 Cloudflare Worker（ota.ryanuo.cc 边缘缓存），失败自动切官方源，再失败提示手动下载 |
+| 🚀 OTA 自动更新 | 检查更新走 GitHub 加速镜像（可配置，见「OTA 镜像」），失败自动切官方源，再失败提示手动下载 |
 
 ## 📥 下载
 
@@ -111,4 +111,22 @@ make release              # 一条龙：bump(默认 patch) + commit + push + 打
 
 推送 `v*` tag 后，CI 自动构建 Windows / macOS / Linux 三端并发布到 GitHub Releases。
 
-> 国内 OTA：检查更新与下载优先走自建 Cloudflare Worker（`ota.ryanuo.cc`，边缘缓存加速，代码见 `deploy/ota-worker.js`），失败后兜底 GitHub 官方直连，仍失败则提示手动打开 Releases 页下载。Worker 的仓库白名单 `ALLOWED_REPOS` 与客户端 `UpdateChecker("owner/repo", "资产前缀")` 构造参数可配置，新应用接入只需各改一处。
+> 国内 OTA：检查更新与下载优先走 GitHub 加速镜像（列表在 `UpdateChecker.cpp` 的 `kMirrorPrefixes`，按实测可用性排序，可自行增删），全部失败后兜底官方直连，仍失败则提示手动打开 Releases 页下载。客户端 `UpdateChecker("owner/repo", "资产前缀")` 构造参数可配置，新应用接入只需改一处。
+
+### OTA 镜像
+
+第三方镜像可用性波动大，填入 `kMirrorPrefixes` 前请先实测。候选地址（需同时支持 API 与 Release 下载，前缀拼接）：
+
+```
+https://ghfast.top
+```
+
+检查命令（把 `<镜像>` 换成候选地址）：
+
+```bash
+# 1. Release 资产（下载）应返回 200/302
+curl -s -o /dev/null -w "%{http_code}\n" --max-time 15 \
+  "https://<镜像>/https://github.com/ryanuo/cpp-wzq/releases/download/v0.3.0/gobang-windows-x64.zip"
+```
+
+两项都通才可用，把可用的镜像前缀（带 `https://` 和结尾 `/`）按速度排序填入 `kMirrorPrefixes`，无需改其他代码（`kMirrorCount` 自动按数组长度计算）。

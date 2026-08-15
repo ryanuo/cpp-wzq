@@ -38,20 +38,24 @@ int main(int argc, char** argv)
     CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-macos.zip")) == "macOS");
     CHECK(UpdateChecker::assetPlatformName(QStringLiteral("gobang-linux.zip")) == "Linux");
 
-    // ---- mirrorUrl：Worker 重写 + 官方兜底 ----
+    // ---- mirrorUrl：CNB 优先 + ghfast.top + 官方兜底 ----
     const QString api =
         QStringLiteral("https://api.github.com/repos/ryanuo/cpp-wzq/releases/latest");
-    CHECK(UpdateChecker::mirrorUrl(0, api) ==
-          QStringLiteral("https://ota.ryanuo.cc/github-api/repos/ryanuo/cpp-wzq/releases/latest"));
     const QString asset = QStringLiteral(
-        "https://github.com/ryanuo/cpp-wzq/releases/download/v0.2.0/gobang-windows-x64.zip");
+        "https://github.com/ryanuo/cpp-wzq/releases/download/v0.3.0/gobang-windows-x64.zip");
+    // index 0: CNB 镜像（Release 资产路径重写为 cnb.cool latest）
     CHECK(UpdateChecker::mirrorUrl(0, asset) ==
-          QStringLiteral("https://ota.ryanuo.cc/release/ryanuo/cpp-wzq/"
-                         "releases/download/v0.2.0/gobang-windows-x64.zip"));
-    // 官方兜底（index >= kMirrorCount）原样返回
-    CHECK(UpdateChecker::mirrorUrl(1, api) == api);
-    CHECK(UpdateChecker::mirrorUrl(1, asset) == asset);
-    // 非 GitHub 域名（如自建源）不重写
+          QStringLiteral("https://cnb.cool/ryanuo/cpp-wzq/-/releases/latest/download/gobang-windows-x64.zip"));
+    // CNB 对非 Release 资产 URL（API 检查）原样返回（= 直连 GitHub）
+    CHECK(UpdateChecker::mirrorUrl(0, api) == api);
+    // index 1: ghfast.top（前缀拼接，API 与下载均代理）
+    CHECK(UpdateChecker::mirrorUrl(1, asset) ==
+          QStringLiteral("https://ghfast.top/") + asset);
+    CHECK(UpdateChecker::mirrorUrl(1, api) ==
+          QStringLiteral("https://ghfast.top/") + api);
+    // 越界 index（>= 镜像数）原样返回，走官方直连
+    CHECK(UpdateChecker::mirrorUrl(2, asset) == asset);
+    // 非 GitHub 域名（如自建源）：CNB 分支不匹配原样返回
     const QString selfHosted = QStringLiteral("https://example.com/pkg.zip");
     CHECK(UpdateChecker::mirrorUrl(0, selfHosted) == selfHosted);
 

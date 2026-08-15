@@ -12,12 +12,19 @@
 #include <QUrl>
 
 namespace {
-// OTA 优先走自建 Cloudflare Worker（ota.ryanuo.cc，国内可缓存加速），失败兜底 GitHub 官方直连
-// 新应用接入：改 GameWindow.cpp 里 UpdateChecker 构造参数 + Worker 环境变量 ALLOWED_REPOS
-constexpr auto kWorkerOrigin = "https://ota.ryanuo.cc";  // Cloudflare Worker
-constexpr auto kApiOrigin = "https://api.github.com";    // GitHub API（官方兜底）
-constexpr auto kReleaseOrigin = "https://github.com";    // GitHub 下载（官方兜底）
-constexpr int kMirrorCount = 1;  // 镜像数（当前只有 Worker 一个）
+// OTA 优先走 GitHub 加速镜像（国内直连慢），失败兜底 GitHub 官方直连
+// 镜像可用性波动大（第三方服务），按实测可用性排序；全部失败后兜底官方直连（慢但可用）
+// 条目格式：
+//   "https://..."        普通镜像：前缀拼接（需同时支持 API 与 Release 下载）
+//   "cnb:"               CNB 国内镜像：路径重写（github.com/{o}/{r}/releases/download/{tag}/{f}
+//                        -> cnb.cool/{o}/{r}/-/releases/latest/download/{f}），
+//                        前提：cnb.cool 上存在同名 {owner}/{repo} 仓库且同步了 Releases
+const char* kMirrorPrefixes[] = {
+    "cnb:",  // CNB 镜像（国内快，需先在 cnb.cool 建立同名仓库并同步 Releases；仅对 Release 下载生效，API 检查原样直连 GitHub）
+    "https://ghfast.top/",  // 实测可用镜像（前缀拼接，API 与下载均代理）
+    // "https://gh-proxy.com/",   // 其他候选：填入实测可用的镜像前缀（需同时支持 API 与 Release 下载）
+};
+constexpr int kMirrorCount = sizeof(kMirrorPrefixes) / sizeof(kMirrorPrefixes[0]);
 constexpr int kTotalSources = kMirrorCount + 1;  // 镜像 + 官方直连兜底
 constexpr int kCheckTimeoutMs = 10000;   // 检查请求超时
 constexpr int kDownloadTimeoutMs = 30000; // 下载请求超时
@@ -29,21 +36,23 @@ QString UpdateChecker::mirrorUrl(int index, const QString& rawUrl)
     {
         return rawUrl;  // 官方直连兜底
     }
-    // 检查更新 API -> Worker /github-api/
-    const QString apiPrefix = QString::fromLatin1(kApiOrigin) + QLatin1Char('/');
-    if (rawUrl.startsWith(apiPrefix))
+    const QByteArray item = QByteArray::fromRawData(kMirrorPrefixes[index],
+                                                    int(qstrlen(kMirrorPrefixes[index])));
+    // CNB 镜像：路径重写（仅对 GitHub Release 资产 URL 生效，其他原样返回）
+    if (item == "cnb:")
     {
-        return QString::fromLatin1(kWorkerOrigin) + QStringLiteral("/github-api/")
-             + rawUrl.mid(apiPrefix.size());
+        const QStringList segs = rawUrl.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        // https: / github.com / owner / repo / releases / download / tag / file
+        if (segs.size() >= 8 && segs[1] == QStringLiteral("github.com")
+            && segs[4] == QStringLiteral("releases") && segs[5] == QStringLiteral("download"))
+        {
+            return QStringLiteral("https://cnb.cool/%1/%2/-/releases/latest/download/%3")
+                .arg(segs[2], segs[3], segs[7]);
+        }
+        return rawUrl;
     }
-    // Release 资产下载 -> Worker /release/
-    const QString releasePrefix = QString::fromLatin1(kReleaseOrigin) + QLatin1Char('/');
-    if (rawUrl.startsWith(releasePrefix))
-    {
-        return QString::fromLatin1(kWorkerOrigin) + QStringLiteral("/release/")
-             + rawUrl.mid(releasePrefix.size());
-    }
-    return rawUrl;  // 其他域名（如自建源）不重写
+    // 普通镜像：前缀拼接
+    return QString::fromLatin1(kMirrorPrefixes[index]) + rawUrl;
 }
 
 UpdateChecker::UpdateChecker(const QString& repoPath, const QString& assetPrefix,
@@ -132,28 +141,13 @@ QString UpdateChecker::assetPlatformName(const QString& assetName)
 
 void UpdateChecker::checkForUpdate()
 {
-    m_checkTried = 0;
-    tryCheckNextMirror(0);
-}
-
-bool UpdateChecker::tryCheckNextMirror(int index)
-{
-    if (index >= kTotalSources)
-    {
-        // 所有镜像与官方兜底均失败：提示手动下载
-        emit checkFailed(QStringLiteral("无法连接更新服务器（已尝试加速镜像与官方源）。\n"
-                                        "可手动打开 Releases 页下载：\n")
-                         + releasePage());
-        return false;
-    }
-    m_checkTried = index;
-    QNetworkRequest req{QUrl(mirrorUrl(index, apiUrl()))};
+    // 检查更新直接走官方 API（JSON 小，无需镜像）；下载才走镜像加速（大文件）
+    QNetworkRequest req{QUrl(apiUrl())};
     req.setRawHeader("User-Agent", "gobang-updater");
     req.setRawHeader("Accept", "application/vnd.github+json");
-    req.setTransferTimeout(kCheckTimeoutMs);  // 慢网络下快速切换到下一个源
+    req.setTransferTimeout(kCheckTimeoutMs);
     QNetworkReply* reply = m_nam->get(req);
     connect(reply, &QNetworkReply::finished, this, &UpdateChecker::onReleaseReplyFinished);
-    return true;
 }
 
 void UpdateChecker::onReleaseReplyFinished()
@@ -166,11 +160,12 @@ void UpdateChecker::onReleaseReplyFinished()
     reply->deleteLater();
     if (reply->error() != QNetworkReply::NoError)
     {
-        // 当前源失败（含超时）：切换到下一个镜像重试
-        tryCheckNextMirror(m_checkTried + 1);
+        // 检查失败：直接提示手动下载（检查不走镜像，无需切换源）
+        emit checkFailed(QStringLiteral("无法连接更新服务器。\n"
+                                        "可手动打开 Releases 页下载：\n")
+                         + releasePage());
         return;
     }
-    m_mirrorIndex = m_checkTried;  // 记录成功镜像，下载沿用
 
     const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
     const QJsonObject root = doc.object();
@@ -223,9 +218,9 @@ void UpdateChecker::download(const QString& url, const QString& destDir)
     const QString fileName = url.mid(url.lastIndexOf(QLatin1Char('/')) + 1);
     m_downloadTarget = destDir + QLatin1Char('/') + fileName;
 
-    // 从检查更新成功的镜像开始下载；失败再依次切换
-    m_downloadTried = m_mirrorIndex;
-    tryDownloadWithMirror(m_mirrorIndex);
+    // 下载走镜像（大文件），从第一个镜像开始，失败依次切换，最后官方兜底
+    m_downloadTried = 0;
+    tryDownloadWithMirror(0);
 }
 
 void UpdateChecker::tryDownloadWithMirror(int index)
