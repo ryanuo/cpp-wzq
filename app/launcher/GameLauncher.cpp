@@ -228,10 +228,16 @@ void GameLauncher::onUpdateAvailable(const QString& version, const QString& asse
                                      const QString& url, qint64 size)
 {
     m_updateAct->setEnabled(true);
+    // tag_name 带 v 前缀（如 "v0.3.10"），去掉再拼 "v%1"，避免显示成 vv0.3.10
+    QString displayVersion = version;
+    if (displayVersion.startsWith(QLatin1Char('v')))
+    {
+        displayVersion = displayVersion.mid(1);
+    }
     const auto reply = QMessageBox::question(
         this, QStringLiteral("发现新版本"),
         QStringLiteral("发现新版本 v%1（当前 v%2）\n\n%3\n\n是否下载并更新？")
-            .arg(version, QCoreApplication::applicationVersion(), assetName),
+            .arg(displayVersion, QCoreApplication::applicationVersion(), assetName),
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
     if (reply != QMessageBox::Yes)
     {
