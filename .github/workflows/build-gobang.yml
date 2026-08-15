@@ -201,6 +201,28 @@ jobs:
 
 
       # ========================================================
+      # Slim Windows Bundle（减包: 32MB -> ~15MB）
+      #   删除软件 OpenGL 渲染器（QWidget 用 raster 引擎, 不加载 GL;
+      #   opengl32sw 是给无 GPU 驱动环境的备用软件渲染, D3Dcompiler 是其配套）
+      #   ffmpeg(avcodec 等) 是 Windows QMediaPlayer 必需后端, 保留
+      # ========================================================
+      - name: Slim Windows Bundle
+        shell: powershell
+        run: |
+          Remove-Item `
+            -Path "dist/opengl32sw.dll" `
+            -Force `
+            -ErrorAction SilentlyContinue
+          Remove-Item `
+            -Path "dist/D3Dcompiler_47.dll" `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+          $size = (Get-ChildItem dist -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
+          Write-Host "Slim size: $([math]::Round($size,1)) MB"
+
+
+      # ========================================================
       # Package Windows
       # ========================================================
       - name: Package Windows
@@ -382,6 +404,43 @@ jobs:
           echo "========================================"
 
           macdeployqt "$APP"
+
+
+      # ========================================================
+      # Slim Bundle（减包: 82MB -> ~35MB）
+      #   1. 架构瘦身: Qt 官方框架是 universal(x86_64+arm64), runner 为 arm64,
+      #      x86_64 冗余删掉（lipo -thin, 体积约减半）
+      #   2. 删 ffmpeg 后端: macOS 播放走 AVFoundation(darwin 插件), 不依赖 ffmpeg
+      #      （Windows/Linux 的 QMediaPlayer 需要 ffmpeg, 不能删）
+      #   3. 删未链接框架: QtDBus/QtSvg（可执行文件未链接; iconengines 依赖 QtSvg 一并删）
+      # ========================================================
+      - name: Slim macOS Bundle
+        run: |
+          APP="build/gobang.app"
+
+          echo "--- 1. lipo -thin arm64 (universal -> arm64) ---"
+          find "$APP" -type f \( -perm -111 -o -name '*.dylib' \) -print0 | while IFS= read -r -d '' f; do
+            if lipo -info "$f" 2>/dev/null | grep -qE 'x86_64 arm64|arm64 x86_64'; then
+              lipo -thin arm64 -output "$f.thin" "$f" && mv "$f.thin" "$f"
+              echo "  thinned: ${f#$APP/}"
+            fi
+          done
+
+          echo "--- 2. 删除 ffmpeg 全家桶（macOS 用 darwin/AVFoundation 后端） ---"
+          rm -f "$APP"/Contents/Frameworks/libavcodec*.dylib \
+                "$APP"/Contents/Frameworks/libavformat*.dylib \
+                "$APP"/Contents/Frameworks/libavutil*.dylib \
+                "$APP"/Contents/Frameworks/libswscale*.dylib \
+                "$APP"/Contents/Frameworks/libswresample*.dylib
+          rm -f "$APP"/Contents/PlugIns/multimedia/libffmpegmediaplugin.dylib
+
+          echo "--- 3. 删除未链接的闲置框架/插件 ---"
+          rm -rf "$APP"/Contents/Frameworks/QtDBus.framework \
+                 "$APP"/Contents/Frameworks/QtSvg.framework \
+                 "$APP"/Contents/PlugIns/iconengines
+
+          echo "--- 瘦身后体积 ---"
+          du -sh "$APP"
 
 
       # ========================================================
@@ -630,6 +689,19 @@ jobs:
           echo ""
           echo "Deploy output:"
           find "$DIST" -maxdepth 3 -print
+
+
+      # --------------------------------------------------------
+      # Slim Linux Bundle（减包: 52MB -> ~42MB）
+      #   删除误带的 QML 模块簇（纯 Widgets 应用不用 QML; 已验证无任何
+      #   非 QML 库引用它们, 是插件依赖递归收集时带入）
+      #   ffmpeg(libav*) 是 Linux QMediaPlayer 必需后端, 保留
+      # --------------------------------------------------------
+      - name: Slim Linux Bundle
+        run: |
+          rm -f dist/lib/libQt6Qml*.so* dist/lib/libQt6Quick*.so*
+          echo "--- 瘦身后体积 ---"
+          du -sh dist
 
 
       # --------------------------------------------------------
