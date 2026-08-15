@@ -678,12 +678,10 @@ jobs:
   # 上传 Release 资产到 CNB（等三端构建全部完成后执行）
   # 前置: CNB 仓库已有该 tag 对应的 release（.cnb.yml tag_push 自动创建）
   # 依赖: GIT_PASSWORD secret（CNB 访问令牌）
-  # 说明: 不用 cnbcool/attachments 插件（其 ##[set-output 输出为 Drone/CNB 格式,
-  #       GitHub Actions 按自身规范解析报 "Required field 'name' is missing"）。
-  #       改调 CNB OpenAPI（与插件同路径, 见实测日志）: 按 tag 取 release_id
-  #       -> POST asset-upload-url -> PUT 上传 -> POST asset-upload-confirmation。
-  #       注意: curl 赋值必须加 || true —— set -e 下 curl 失败会静默终止,
-  #       状态码永远打印不出来, 无法诊断。
+  # 实现: 用 cnbcool/attachments 插件（fork: ryanuo/attachments, set-output 已做
+  #       GitHub Actions 兼容: GITHUB_ACTIONS 环境写 $GITHUB_OUTPUT, 不再输出
+  #       Drone 格式 ##[set-output, 避免 GitHub 报 "Required field 'name' is missing"）。
+  #       官方合并后可将 clone 地址换回官方仓库。
   # ============================================================
   upload-cnb:
     name: Upload Assets to CNB Release
@@ -699,102 +697,21 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Clone attachments plugin (fork)
+        run: git clone --depth 1 https://cnb.cool/ryanuo/attachments.git plugin
+
+      - name: Build plugin
+        working-directory: plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
       - name: Upload to CNB Release
+        id: upload
         env:
           CNB_TOKEN: ${{ secrets.GIT_PASSWORD }}
-          CNB_REPO: ryanuo/cpp-wzq
-          CNB_TAG: ${{ inputs.cnb_tag || github.ref_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          API="https://api.cnb.cool/${CNB_REPO}/-/releases"
-          AUTH="Authorization: Bearer ${CNB_TOKEN}"
-
-          # 递归查找 JSON 中的指定 key（兼容响应结构差异, 找不到输出空串）
-          jget() {
-            python3 -c "
-          import json, sys
-          d = json.load(open('$1'))
-          def find(o, k):
-              if isinstance(o, dict):
-                  if k in o: return o[k]
-                  for v in o.values():
-                      r = find(v, k)
-                      if r is not None: return r
-              elif isinstance(o, list):
-                  for v in o:
-                      r = find(v, k)
-                      if r is not None: return r
-              return None
-          r = find(d, '$2')
-          print(r if r is not None else '')
-          "
-          }
-
-          # 1. 按 tag 取 release_id（|| true: 即使 curl 失败也要拿到状态码）
-          # Accept: application/json 必须加 —— CNB 对 curl 默认 Accept: */* 返回 406
-          HTTP=$(curl -s -o /tmp/cnb_release.json -w "%{http_code}" \
-            -H "$AUTH" -H "Accept: application/json" \
-            "$API/tags/${CNB_TAG}" || true)
-          echo "GET release by tag: HTTP ${HTTP}"
-          if [ "$HTTP" != "200" ]; then
-            echo "::error::取 release 失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_release.json)"
-            exit 1
-          fi
-          RELEASE_ID=$(jget /tmp/cnb_release.json id)
-          if [ -z "$RELEASE_ID" ]; then
-            echo "::error::未取到 release_id, 响应: $(head -c 500 /tmp/cnb_release.json)"
-            exit 1
-          fi
-          echo "release_id=${RELEASE_ID} (tag=${CNB_TAG})"
-
-          # 2-4. 逐个附件: 取上传地址 -> PUT 上传 -> 确认
-          for f in dist/*.zip; do
-            NAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f")
-            echo "== 上传 ${NAME} (${SIZE} bytes) =="
-
-            HTTP=$(curl -s -o /tmp/cnb_upload.json -w "%{http_code}" -H "$AUTH" \
-              -H "Accept: application/json" \
-              -H "Content-Type: application/json" \
-              -d "{\"asset_name\":\"${NAME}\",\"size\":${SIZE},\"overwrite\":true}" \
-              "$API/${RELEASE_ID}/asset-upload-url" || true)
-            echo "POST asset-upload-url: HTTP ${HTTP}"
-            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
-              echo "::error::取上传地址失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_upload.json)"
-              exit 1
-            fi
-            # 诊断: 打印 201 响应体（字段名以实际响应为准）
-            echo "upload-url 响应: $(head -c 300 /tmp/cnb_upload.json)"
-
-            # 响应字段: upload_url(PUT 地址) + verify_url(完整确认地址, 含 token 与编码路径)
-            UPLOAD_URL=$(jget /tmp/cnb_upload.json upload_url || true)
-            VERIFY_URL=$(jget /tmp/cnb_upload.json verify_url || true)
-            if [ -z "$UPLOAD_URL" ] || [ -z "$VERIFY_URL" ]; then
-              echo "::error::上传地址响应缺字段(upload_url/verify_url), 响应: $(head -c 500 /tmp/cnb_upload.json)"
-              exit 1
-            fi
-
-            HTTP=$(curl -s -o /tmp/cnb_put.json -w "%{http_code}" -X PUT \
-              --data-binary @"$f" -H "Content-Type: application/octet-stream" \
-              "$UPLOAD_URL" || true)
-            echo "PUT upload: HTTP ${HTTP}"
-            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
-              echo "::error::PUT 上传失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_put.json)"
-              exit 1
-            fi
-
-            HTTP=$(curl -s -o /tmp/cnb_confirm.json -w "%{http_code}" -H "$AUTH" \
-              -H "Accept: application/json" -X POST "$VERIFY_URL" || true)
-            echo "POST confirm: HTTP ${HTTP}"
-            if [ "$HTTP" != "200" ]; then
-              echo "::error::确认上传失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_confirm.json)"
-              exit 1
-            fi
-
-            echo "已上传: ${NAME}"
-          done
-
-          echo "全部附件已上传到 CNB Release: ${CNB_TAG}"
-          echo "https://cnb.cool/${CNB_REPO}/-/releases/tag/${CNB_TAG}"
+          CNB_API_ENDPOINT: 'https://api.cnb.cool'
+          CNB_REPO_SLUG: 'ryanuo/cpp-wzq'
+          PLUGIN_TAG: ${{ inputs.cnb_tag || github.ref_name }}
+          PLUGIN_ATTACHMENTS: './dist/*.zip'
+        run: node plugin/dist/entrypoint.js
