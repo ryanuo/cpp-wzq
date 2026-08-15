@@ -695,6 +695,9 @@ void GameWindow::onDownloadFinished(const QString& filePath)
            << "rmdir /s /q \"" << updDir << "\" >> \"%LOG%\" 2>&1\r\n";
         batFile.close();
     }
+    // 弹窗确认后再启动更新脚本：用户在弹窗停留时 bat 不会提前跑（避免等超时）
+    QMessageBox::information(this, QStringLiteral("更新"),
+                             QStringLiteral("更新包已就绪。\n\n点击「确定」后程序将退出并自动重启，完成更新。"));
     QProcess::startDetached(batPath);
     close();
 #elif defined(Q_OS_MACOS)
@@ -723,8 +726,10 @@ void GameWindow::onDownloadFinished(const QString& filePath)
            << "open \"$BUNDLE_PARENT/gobang.app\"\n";
         scriptFile.close();
     }
+    // 弹窗确认后再启动更新脚本（同上，避免脚本提前跑）
+    QMessageBox::information(this, QStringLiteral("更新"),
+                             QStringLiteral("更新包已就绪。\n\n点击「确定」后程序将退出并自动重启，完成更新。"));
     QProcess::startDetached(QStringLiteral("/bin/sh"), {scriptPath});
-    setStatus(QStringLiteral("正在应用更新，程序即将重启…"));
     close();
 #else
     // Linux：安装方式多样（解压目录/发行包），保持手动引导
