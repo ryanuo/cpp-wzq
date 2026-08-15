@@ -1,0 +1,3 @@
+// Windows 应用图标资源（CMake 编译 .rc 调用 rc.exe，任何 CMake 版本均生效）
+// 相比 RC_ICONS 属性（需 CMake 3.22+，部分环境静默失效）更可靠
+IDI_ICON1 ICON "gobang.ico"

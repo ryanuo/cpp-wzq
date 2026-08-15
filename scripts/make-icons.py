@@ -5,10 +5,11 @@
 设计: 深色圆角底 + 5×5 棋盘网格 + 黑白两子（五子棋），与首页卡片风格呼应
 """
 import os
+import struct
 import subprocess
 import tempfile
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 SIZE = 1024
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -83,10 +84,36 @@ def make_icns(img: Image.Image) -> str:
 
 
 def make_ico(img: Image.Image) -> str:
-    """多尺寸 .ico（Windows 资源编译器用）"""
+    """生成 BMP(DIB) 格式多尺寸 .ico。
+    注意: 必须用 BMP 而非 PIL 默认的 PNG 压缩 —— MSVC 的 rc.exe 对 PNG 压缩
+    图标兼容性差（表现为 exe 里无 RT_ICON 资源），BMP 格式 100% 兼容。
+    """
+    sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+    blobs = []
+    for w, h in sizes:
+        im = img.resize((w, h), Image.LANCZOS).convert("RGBA")
+        # 像素：自下而上 BGRA（32bpp）
+        px = bytearray()
+        for y in range(h - 1, -1, -1):
+            for x in range(w):
+                r, g, b, a = im.getpixel((x, y))
+                px += bytes((b, g, r, a))
+        # AND mask：32bpp 带 alpha 时全 0（不透明）
+        and_row = ((w + 31) // 32) * 4
+        and_mask = b"\x00" * (and_row * h)
+        header = struct.pack("<IiiHHIIiiII", 40, w, h * 2, 1, 32, 0, len(px), 0, 0, 0, 0)
+        blobs.append((w, header + bytes(px) + and_mask))
+    # ICONDIR + ICONDIRENTRY（256 写 0 表示 256）
+    out = struct.pack("<HHH", 0, 1, len(blobs))
+    offset = 6 + 16 * len(blobs)
+    for w, data in blobs:
+        out += struct.pack("<BBBBHHII", w & 0xFF, w & 0xFF, 0, 0, 1, 32, len(data), offset)
+        offset += len(data)
+    for _, data in blobs:
+        out += data
     ico = os.path.join(ICON_DIR, "gobang.ico")
-    img.save(ico, format="ICO",
-             sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    with open(ico, "wb") as f:
+        f.write(out)
     return ico
 
 
