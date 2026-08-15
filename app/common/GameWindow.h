@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPointer>
 
 #include "ChessTypes.h"
 
@@ -11,6 +12,7 @@ class QLabel;
 class QMenu;
 class QMediaPlayer;
 class QAudioOutput;
+class QMessageBox;
 class QSoundEffect;
 class QVBoxLayout;
 class UpdateChecker;
@@ -89,6 +91,9 @@ protected:
     void setStatus(const QString& text);
     void playSfx(const QString& qrcPath);
     void showResultDialog(const QString& title, const QString& text);
+    // 自动关闭结果弹窗（收到重开请求/对方同意/拒绝/断开时调用，防止残留框
+    // 被手动关闭时误走「断开」分支触发 m_network->stop()）
+    void closeResultDialog();
     bool myTurn() const;
     chess_kind_t opponentKind() const;
     void setConnectedUi(bool connected);
@@ -114,6 +119,8 @@ protected:
     bool m_restartPending = false;     // 已发重开请求，等待对方回复
     bool m_localDisconnect = false;    // 本次断开是否本地主动
     bool m_resultShown = false;        // 本次对局结果已弹窗
+    QPointer<QMessageBox> m_resultDialog;      // 当前结果弹窗（checkGameEnd 弹出，可被流程自动关闭）
+    bool m_resultDialogAutoClosed = false;     // 结果弹窗是否被流程自动关闭（非用户点按钮）
     chess_kind_t m_myKind = CHESS_BLACK;
     bool m_connected = false;
     bool m_gameOver = false;

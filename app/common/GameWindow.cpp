@@ -328,6 +328,7 @@ void GameWindow::onRestartRequested()
     {
         return;
     }
+    closeResultDialog();  // 关掉胜负结果框，避免两个模态框叠加
     QMessageBox box(this);
     box.setWindowTitle(QStringLiteral("再来一局"));
     box.setText(QStringLiteral("对方请求再来一局，是否同意？"));
@@ -350,6 +351,7 @@ void GameWindow::onRestartRequested()
 
 void GameWindow::onRestartAccepted()
 {
+    closeResultDialog();  // 对方同意：我方结果框（若开着）一并关闭
     m_restartPending = false;
     resetBoard();
     updateTurnHint();
@@ -358,12 +360,14 @@ void GameWindow::onRestartAccepted()
 
 void GameWindow::onRestartRejected()
 {
+    closeResultDialog();  // 对方拒绝：我方结果框（若开着）一并关闭
     m_restartPending = false;
     setStatus(QStringLiteral("对方拒绝了重开请求"));
 }
 
 void GameWindow::onDisconnected()
 {
+    closeResultDialog();  // 断开：结果框（若开着）一并关闭，防止手动关闭误触发断开逻辑
     // 对局中且非本地主动断开、且未弹过结果 → 对方认输（QUIT 或掉线）
     const bool inGame = moveCount() > 0;
     const bool opponentLeft = inGame && !m_localDisconnect && !m_resultShown;
@@ -580,6 +584,15 @@ void GameWindow::showResultDialog(const QString& title, const QString& text)
     box.setText(text);
     box.addButton(QStringLiteral("关闭"), QMessageBox::AcceptRole);
     box.exec();
+}
+
+void GameWindow::closeResultDialog()
+{
+    if (m_resultDialog)
+    {
+        m_resultDialogAutoClosed = true;  // 标记流程接管，exec() 返回后不再执行按钮分支
+        m_resultDialog->close();          // 触发 exec() 返回（嵌套事件循环同步处理 close）
+    }
 }
 
 // ---- OTA 更新 ----

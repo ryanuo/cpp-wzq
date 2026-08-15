@@ -168,15 +168,27 @@ void XiangqiWindow::checkGameEnd(chess_kind_t lastKind)
         const bool iWin = (lastKind == m_myKind);
         playSfx(iWin ? QStringLiteral("qrc:/res/win.mp3") : QStringLiteral("qrc:/res/lose.mp3"));
 
-        QMessageBox box(this);
-        box.setWindowTitle(QStringLiteral("对局结束"));
-        box.setIcon(QMessageBox::Information);
-        box.setText(iWin ? QStringLiteral("你赢了！") : QStringLiteral("你输了！"));
-        QPushButton* again = box.addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
-        box.addButton(QStringLiteral("断开"), QMessageBox::RejectRole);
-        box.exec();
+        closeResultDialog();  // 关掉可能残留的旧结果框（防御）
+        auto* box = new QMessageBox(this);
+        box->setWindowTitle(QStringLiteral("对局结束"));
+        box->setIcon(QMessageBox::Information);
+        box->setText(iWin ? QStringLiteral("你赢了！") : QStringLiteral("你输了！"));
+        QPushButton* again = box->addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
+        box->addButton(QStringLiteral("断开"), QMessageBox::RejectRole);
+        m_resultDialog = box;
+        m_resultDialogAutoClosed = false;
+        box->exec();
 
-        if (box.clickedButton() == again)
+        const bool autoClosed = m_resultDialogAutoClosed;  // 流程接管（重开请求/同意/拒绝/断开）
+        const bool clickedAgain = (box->clickedButton() == again);
+        m_resultDialog = nullptr;
+        delete box;
+
+        if (autoClosed)
+        {
+            return;  // 弹窗被流程自动关闭，不再执行按钮分支（防手动关闭误触发断开）
+        }
+        if (clickedAgain)
         {
             onNewGameClicked();
         }
