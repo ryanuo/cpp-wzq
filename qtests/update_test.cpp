@@ -43,9 +43,9 @@ int main(int argc, char** argv)
         QStringLiteral("https://api.github.com/repos/ryanuo/cpp-wzq/releases/latest");
     const QString asset = QStringLiteral(
         "https://github.com/ryanuo/cpp-wzq/releases/download/v0.3.0/gobang-windows-x64.zip");
-    // index 0: CNB 镜像（Release 资产路径重写为 cnb.cool latest）
+    // index 0: CNB 镜像（Release 资产路径重写为 cnb.cool download/{tag}）
     CHECK(UpdateChecker::mirrorUrl(0, asset) ==
-          QStringLiteral("https://cnb.cool/ryanuo/cpp-wzq/-/releases/latest/download/gobang-windows-x64.zip"));
+          QStringLiteral("https://cnb.cool/ryanuo/cpp-wzq/-/releases/download/v0.3.0/gobang-windows-x64.zip"));
     // CNB 对非 Release 资产 URL（API 检查）原样返回（= 直连 GitHub）
     CHECK(UpdateChecker::mirrorUrl(0, api) == api);
     // index 1: ghfast.top（前缀拼接，API 与下载均代理）

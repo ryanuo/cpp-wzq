@@ -46,8 +46,9 @@ QString UpdateChecker::mirrorUrl(int index, const QString& rawUrl)
         if (segs.size() >= 8 && segs[1] == QStringLiteral("github.com")
             && segs[4] == QStringLiteral("releases") && segs[5] == QStringLiteral("download"))
         {
-            return QStringLiteral("https://cnb.cool/%1/%2/-/releases/latest/download/%3")
-                .arg(segs[2], segs[3], segs[7]);
+            // CNB 下载 URL: /-/releases/download/{tag}/{file}（实测 latest 前缀 404）
+            return QStringLiteral("https://cnb.cool/%1/%2/-/releases/download/%3/%4")
+                .arg(segs[2], segs[3], segs[6], segs[7]);
         }
         return rawUrl;
     }
