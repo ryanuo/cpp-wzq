@@ -1,0 +1,69 @@
+# 测试 CNB attachments 插件 fork 的 set-output 修复
+# （ryanuo/attachments 未合并官方前，用真实 GitHub Actions 环境验证：
+#   GITHUB_ACTIONS=true + GITHUB_OUTPUT 自动注入，直接 node 跑插件入口）
+# 触发: 手动（Actions 页 -> Test CNB attachments fork -> Run workflow，可指定 tag）
+# 前置: GIT_PASSWORD secret（CNB 访问令牌）；CNB 仓库已有该 tag 的 release
+name: Test CNB attachments fork
+
+on:
+  workflow_dispatch:
+    inputs:
+      cnb_tag:
+        description: 'CNB release tag（如 v0.2.5）'
+        required: false
+        default: 'v0.2.5'
+      cnb_repo:
+        description: 'CNB 仓库路径（默认 ryanuo/cpp-wzq）'
+        required: false
+        default: 'ryanuo/cpp-wzq'
+
+jobs:
+  test-plugin:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Clone fork (cnb.cool/ryanuo/attachments)
+        run: git clone --depth 1 https://cnb.cool/ryanuo/attachments.git plugin
+
+      - name: Install & build
+        working-directory: plugin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Prepare test attachment
+        run: echo "gh set-output test $(date +%s)" > plugin/test-gh.txt
+
+      # 关键: runner 上 GITHUB_ACTIONS 自动为 'true'、GITHUB_OUTPUT 自动指向 runner 文件,
+      # 插件修复代码会写 $GITHUB_OUTPUT -> runner 自动解析为 step output
+      - name: Upload (GitHub Actions 环境)
+        id: upload
+        working-directory: plugin
+        env:
+          CNB_TOKEN: ${{ secrets.GIT_PASSWORD }}
+          CNB_API_ENDPOINT: 'https://api.cnb.cool'
+          CNB_REPO_SLUG: ${{ inputs.cnb_repo }}
+          PLUGIN_TAG: ${{ inputs.cnb_tag }}
+          PLUGIN_ATTACHMENTS: './test-gh.txt'
+        run: node dist/entrypoint.js
+
+      - name: Verify no Drone set-output + FILES captured
+        run: |
+          echo "steps.upload.outputs.FILES = '${{ steps.upload.outputs.FILES }}'"
+          if [ -n "${{ steps.upload.outputs.FILES }}" ]; then
+            echo "✅ FILES 已写入 GITHUB_OUTPUT 并被 runner 捕获"
+          else
+            echo "❌ 未取到 FILES（修复未生效或上传失败）"
+            exit 1
+          fi
+
+      - name: Cleanup (删除测试附件)
+        if: always()
+        working-directory: plugin
+        env:
+          CNB_TOKEN: ${{ secrets.GIT_PASSWORD }}
+          CNB_API_ENDPOINT: 'https://api.cnb.cool'
+          CNB_REPO_SLUG: ${{ inputs.cnb_repo }}
+          PLUGIN_TAG: ${{ inputs.cnb_tag }}
+          PLUGIN_ATTACHMENTS: 'test-gh.txt'
+          PLUGIN_TYPE: 'DELETE'
+        run: node dist/entrypoint.js
