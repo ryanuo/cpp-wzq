@@ -138,6 +138,11 @@ void GameWindow::startOnline(const QString& password)
 
 void GameWindow::closeEvent(QCloseEvent* event)
 {
+    // 对局中关闭窗口 = 主动退出 = 认输（与「断开」一致，对端走认输流程）
+    if (m_connected && moveCount() > 0 && !m_gameOver && !m_resultShown)
+    {
+        m_network->sendSurrender();
+    }
     m_network->stop();
     event->accept();
 }
@@ -217,15 +222,17 @@ void GameWindow::onDisconnectClicked()
     {
         return;
     }
-    // 断开 = 认输，弹确认防止误点
+    // 断开 = 认输（防逃跑），弹确认防止误点；与「认输」走同一协议，对端文案一致
     const auto reply = QMessageBox::question(
         this, QStringLiteral("断开连接"),
-        QStringLiteral("断开连接将视为认输，确定吗？"),
+        QStringLiteral("对局中断开连接将视为认输，确定吗？"),
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (reply == QMessageBox::Yes)
     {
         m_localDisconnect = true;
+        m_network->sendSurrender();
         m_network->stop();
+        setStatus(QStringLiteral("你认输了"));
     }
 }
 
@@ -356,9 +363,10 @@ void GameWindow::onRestartRequested()
 void GameWindow::onDisconnected()
 {
     closeResultDialog();   // 断开：结果框（若开着）一并关闭，防止手动关闭误触发断开逻辑
-    // 对局中且非本地主动断开、且未弹过结果 → 对方认输（QUIT 或掉线）
+    // 对局中且非本地主动断开、且未弹过结果、且非本地网络故障 → 对方认输（QUIT/掉线/崩溃）
     const bool inGame = moveCount() > 0;
-    const bool opponentLeft = inGame && !m_localDisconnect && !m_resultShown;
+    const bool opponentLeft = inGame && !m_localDisconnect && !m_resultShown
+                              && !m_network->abnormalDisconnect();
     m_connected = false;
     m_gameOver = false;
     m_undoPending = false;

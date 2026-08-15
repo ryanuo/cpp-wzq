@@ -47,6 +47,7 @@ void NetworkManager::start(const QString& password)
     {
         return;
     }
+    m_abnormalDisconnect = false;  // 新一局连接：清零上次的故障标志
 
     // 密码哈希：配对过滤 + 握手校验
     m_passwordHash = QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256).toHex();
@@ -491,10 +492,16 @@ void NetworkManager::onTcpDisconnected()
     }
 }
 
-void NetworkManager::onTcpError(QAbstractSocket::SocketError /*error*/)
+void NetworkManager::onTcpError(QAbstractSocket::SocketError error)
 {
     if (m_connected)
     {
+        // 对局中 socket 异常：仅"对端正常关闭连接"视为对端断开（判认输）；
+        // 其余（本地断网/超时/未知错误）标记 abnormal，避免双方同时判对方认输
+        if (error != QAbstractSocket::RemoteHostClosedError)
+        {
+            m_abnormalDisconnect = true;
+        }
         return;
     }
     // 对方服务端可能尚未就绪，重试连接

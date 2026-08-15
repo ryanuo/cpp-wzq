@@ -37,6 +37,9 @@ public:
     bool isConnected() const { return m_connected; }
     bool isHost() const { return m_isHost; }
     QHostAddress peerAddress() const { return m_peerIp; }
+    // 本次断开是否为本地网络故障（断网等，非对端断开）：
+    // 为 true 时对端不应被判"认输"，避免双方同时判胜
+    bool abnormalDisconnect() const { return m_abnormalDisconnect; }
 
     void sendMove(int row, int col);
     void sendMoveFromTo(int fr, int fc, int tr, int tc);  // 象棋：起止格走子
@@ -92,6 +95,7 @@ private:
     bool m_isHost = false;
     bool m_connecting = false;
     bool m_connected = false;
+    bool m_abnormalDisconnect = false;  // 本次断开是否为本地网络故障（断网等）
     bool m_peerHelloOk = false;
     QByteArray m_tcpBuffer;
 };
