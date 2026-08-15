@@ -65,8 +65,6 @@ protected slots:
     void onDisconnected();
     void onStatusChanged(const QString& text);
     void onRestartRequested();
-    void onRestartAccepted();
-    void onRestartRejected();
     void onUndoRequested();
     void onUndoAccepted();
     void onUndoRejected();
@@ -91,7 +89,7 @@ protected:
     void setStatus(const QString& text);
     void playSfx(const QString& qrcPath);
     void showResultDialog(const QString& title, const QString& text);
-    // 自动关闭结果弹窗（收到重开请求/对方同意/拒绝/断开时调用，防止残留框
+    // 自动关闭结果弹窗（收到重开请求/对端同意/断开时调用，防止残留框
     // 被手动关闭时误走「断开」分支触发 m_network->stop()）
     void closeResultDialog();
     bool myTurn() const;
@@ -116,7 +114,8 @@ protected:
     QSoundEffect* m_startSound = nullptr;  // 落子/开始音效（子类播放）
     QSoundEffect* m_downSound = nullptr;
     bool m_undoPending = false;        // 已发悔棋请求，等待对方回复
-    bool m_restartPending = false;     // 已发重开请求，等待对方回复
+    bool m_restartPending = false;     // 我方已点「再来一局」，等待对方也点
+    bool m_peerRestartRequested = false;  // 对方已点「再来一局」（双方都点 → 自动新局）
     bool m_localDisconnect = false;    // 本次断开是否本地主动
     bool m_resultShown = false;        // 本次对局结果已弹窗
     QPointer<QMessageBox> m_resultDialog;      // 当前结果弹窗（checkGameEnd 弹出，可被流程自动关闭）

@@ -94,7 +94,7 @@ cpp-wzq/
 ## 🔌 协议
 
 - **UDP 45231**：广播发现 `GOMOKU1|HELLO|sha256(密码)|nonce`
-- **TCP 45232**：对局传输 `HELLO / MOVE / RESTART_REQ / RESTART_OK / RESTART_NO / UNDO / UNDO_OK / UNDO_NO / SURRENDER / QUIT`
+- **TCP 45232**：对局传输 `HELLO / MOVE / RESTART_REQ / UNDO / UNDO_OK / UNDO_NO / SURRENDER / QUIT`
 - **MOVE**：五子棋 `MOVE <row> <col>`；象棋 `MOVE <fr> <fc> <tr> <tc>`（起止格，选子本地完成）
 - 角色协商：nonce 小者执黑（HOST），双方独立计算必然一致；象棋红方 = 先手方
 

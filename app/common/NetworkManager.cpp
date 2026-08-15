@@ -386,14 +386,6 @@ void NetworkManager::handleLine(const QByteArray& line)
     {
         emit restartRequested();
     }
-    else if (parts[0] == "RESTART_OK" && m_connected)
-    {
-        emit restartAccepted();
-    }
-    else if (parts[0] == "RESTART_NO" && m_connected)
-    {
-        emit restartRejected();
-    }
     else if (parts[0] == "UNDO" && m_connected)
     {
         emit undoRequested();
@@ -464,14 +456,6 @@ void NetworkManager::sendRestartRequest()
     if (m_connected)
     {
         sendLine("RESTART_REQ");
-    }
-}
-
-void NetworkManager::sendRestartReply(bool accept)
-{
-    if (m_connected)
-    {
-        sendLine(accept ? "RESTART_OK" : "RESTART_NO");
     }
 }
 

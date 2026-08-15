@@ -13,13 +13,16 @@ XiangqiBoard::XiangqiBoard(QWidget* parent)
 // 交叉点坐标（逻辑 600 系）：图片模式按图片网格校准，程序模式用固定边距/格距
 QPointF XiangqiBoard::cellPoint(int row, int col) const
 {
+    // 翻转视角 = 从对面看：行、列同时镜像（旋转 180°），仅翻行会导致左右错位
+    // （黑方视角右侧实际是模型左侧，红方看到的位置会左右相反）
     const int r = m_flipped ? (XiangqiChess::kRows - 1 - row) : row;
+    const int c = m_flipped ? (XiangqiChess::kCols - 1 - col) : col;
     if (!m_boardBg.isNull())
     {
         const float s = static_cast<float>(kLogicSize) / kImgSize;
-        return QPointF((kImgX0 + col * kImgCellX) * s, (kImgY0 + r * kImgCellY) * s);
+        return QPointF((kImgX0 + c * kImgCellX) * s, (kImgY0 + r * kImgCellY) * s);
     }
-    return QPointF(kMargin + col * kCell, kMargin + r * kCell);
+    return QPointF(kMargin + c * kCell, kMargin + r * kCell);
 }
 
 void XiangqiBoard::setFlipped(bool flipped)
@@ -64,7 +67,16 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
     // 底：图片（用户棋盘图，自带网格）或按风格程序绘制
     if (!m_boardBg.isNull())
     {
+        painter.save();
+        if (m_flipped)
+        {
+            // 翻转视角：底图旋转 180°（水平+垂直镜像），与 cellPoint 行列翻转后的
+            // 棋子位置对齐；只镜像单方向会导致棋子与底图网格错位
+            painter.translate(kLogicSize, kLogicSize);
+            painter.rotate(180);
+        }
         painter.drawPixmap(0, 0, kLogicSize, kLogicSize, m_boardBg);
+        painter.restore();
     }
     else
     {
@@ -173,8 +185,19 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
     f.setBold(true);
     painter.setFont(f);
     painter.setPen(red ? QColor(170, 30, 20) : QColor(40, 40, 40));
+    painter.save();
+    if (red == m_flipped)
+    {
+        // 物理正确的棋子文字方向：对方棋子字朝向对方那侧，自己这侧看是反的
+        //   黑方（翻转）视角：红方棋子反、自己黑子正
+        //   红方（正向）视角：黑方棋子反、自己红子正
+        painter.translate(p.x(), p.y());
+        painter.rotate(180);
+        painter.translate(-p.x(), -p.y());
+    }
     painter.drawText(QRectF(p.x() - radius, p.y() - radius, radius * 2, radius * 2),
                      Qt::AlignCenter, QString::fromUtf8(XiangqiChess::pieceName(piece)));
+    painter.restore();
 }
 
 void XiangqiBoard::mousePressEvent(QMouseEvent* event)

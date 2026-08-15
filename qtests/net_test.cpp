@@ -99,41 +99,25 @@ int main(int argc, char* argv[])
     }
     std::printf("PASS: MOVE 双向往返正常\n");
 
-    // 3. 再来一局协议 (RESTART_REQ / RESTART_OK / RESTART_NO)
+    // 3. 再来一局协议 (RESTART_REQ 双向，双方都点即重开，无 OK/NO 应答)
     bool bGotReq = false;   // B 收到 A 的重开请求
-    bool aGotOk = false;    // A 收到 B 的同意
     bool aGotReq = false;   // A 收到 B 的重开请求
-    bool bGotNo = false;    // B 收到 A 的拒绝
     QObject::connect(&b, &NetworkManager::restartRequested, [&] { bGotReq = true; });
-    QObject::connect(&a, &NetworkManager::restartAccepted, [&] { aGotOk = true; });
     QObject::connect(&a, &NetworkManager::restartRequested, [&] { aGotReq = true; });
-    QObject::connect(&b, &NetworkManager::restartRejected, [&] { bGotNo = true; });
 
-    a.sendRestartRequest();          // A 请求重开 -> B 收到请求
+    a.sendRestartRequest();          // A 点「再来一局」-> B 收到请求
     if (!waitUntil([&] { return bGotReq; }))
     {
-        std::printf("FAIL: RESTART_REQ 未到达\n");
+        std::printf("FAIL: RESTART_REQ (A->B) 未到达\n");
         return 1;
     }
-    b.sendRestartReply(true);        // B 同意 -> A 收到同意
-    if (!waitUntil([&] { return aGotOk; }))
-    {
-        std::printf("FAIL: RESTART_OK 未到达\n");
-        return 1;
-    }
-    b.sendRestartRequest();          // B 再请求 -> A 收到请求
+    b.sendRestartRequest();          // B 也点 -> A 收到请求（双方都点即重开）
     if (!waitUntil([&] { return aGotReq; }))
     {
         std::printf("FAIL: RESTART_REQ (B->A) 未到达\n");
         return 1;
     }
-    a.sendRestartReply(false);       // A 拒绝 -> B 收到拒绝
-    if (!waitUntil([&] { return bGotNo; }))
-    {
-        std::printf("FAIL: RESTART_NO 未到达\n");
-        return 1;
-    }
-    std::printf("PASS: 再来一局协议正常 (REQ/OK/NO 往返)\n");
+    std::printf("PASS: 再来一局协议正常 (REQ 双向往返)\n");
 
     // 3.5 悔棋协议往返 (UNDO / UNDO_OK / UNDO_NO)
     bool aGotUndo = false;

@@ -102,8 +102,6 @@ GameWindow::GameWindow(const QString& title, QWidget* parent)
     connect(m_network, &NetworkManager::moveReceived, this, &GameWindow::onMoveReceived);
     connect(m_network, &NetworkManager::moveFromToReceived, this, &GameWindow::onMoveFromToReceived);
     connect(m_network, &NetworkManager::restartRequested, this, &GameWindow::onRestartRequested);
-    connect(m_network, &NetworkManager::restartAccepted, this, &GameWindow::onRestartAccepted);
-    connect(m_network, &NetworkManager::restartRejected, this, &GameWindow::onRestartRejected);
     connect(m_network, &NetworkManager::undoRequested, this, &GameWindow::onUndoRequested);
     connect(m_network, &NetworkManager::undoAccepted, this, &GameWindow::onUndoAccepted);
     connect(m_network, &NetworkManager::undoRejected, this, &GameWindow::onUndoRejected);
@@ -180,19 +178,31 @@ void GameWindow::onNewGameClicked()
         return;
     }
 
-    // 对局已结束（结果窗「再来一局」/平局窗）：发重开请求，需对方同意
+    // 对局已结束（结果窗「再来一局」/平局窗）：表达重开意愿，双方都点才开新局
     if (m_gameOver)
     {
         if (m_restartPending)
         {
-            setStatus(QStringLiteral("已发送重开请求，等待对方同意…"));
+            setStatus(QStringLiteral("已发送重开请求，等待对方也点「再来一局」…"));
             return;
         }
         if (m_connected)
         {
             m_restartPending = true;
             m_network->sendRestartRequest();
-            setStatus(QStringLiteral("已发送重开请求，等待对方同意…"));
+            if (m_peerRestartRequested)
+            {
+                // 对方已点 → 双方达成，直接新局
+                m_peerRestartRequested = false;
+                m_restartPending = false;
+                resetBoard();
+                updateTurnHint();
+                setStatus(QStringLiteral("双方都请求重开 · 新的一局"));
+            }
+            else
+            {
+                setStatus(QStringLiteral("已发送重开请求，等待对方也点「再来一局」…"));
+            }
         }
         return;
     }
@@ -319,55 +329,33 @@ void GameWindow::onConnected(bool isHost)
 
 void GameWindow::onRestartRequested()
 {
-    if (!m_connected)
+    if (!m_connected || !m_gameOver)
     {
-        return;
+        return; // 对局中收到视为误发，忽略
     }
-    // 仅对局已结束才弹确认；对局中收到视为误发，忽略
-    if (!m_gameOver)
-    {
-        return;
-    }
-    closeResultDialog();  // 关掉胜负结果框，避免两个模态框叠加
-    QMessageBox box(this);
-    box.setWindowTitle(QStringLiteral("再来一局"));
-    box.setText(QStringLiteral("对方请求再来一局，是否同意？"));
-    QPushButton* yes = box.addButton(QStringLiteral("同意"), QMessageBox::AcceptRole);
-    box.addButton(QStringLiteral("拒绝"), QMessageBox::RejectRole);
-    box.exec();
+    closeResultDialog();  // 对方已点重开，胜负结果框（若开着）一并关闭
 
-    const bool accept = (box.clickedButton() == yes);
-    m_network->sendRestartReply(accept);
-    if (accept)
+    m_peerRestartRequested = true;
+    if (m_restartPending)
     {
+        // 双方都点了 → 自动新局；再发一次 REQ 作回执（对端收到后同样达成，
+        // 对端若已 reset 则被 m_gameOver 拦截，不会循环）
+        m_peerRestartRequested = false;
+        m_restartPending = false;
+        m_network->sendRestartRequest();
         resetBoard();
-        setStatus(QStringLiteral("对方请求重开，已同意 · 新的一局"));
+        updateTurnHint();
+        setStatus(QStringLiteral("双方都请求重开 · 新的一局"));
     }
     else
     {
-        setStatus(QStringLiteral("已拒绝对方的重开请求"));
+        setStatus(QStringLiteral("对方请求再来一局，你也点「再来一局」即可重开"));
     }
-}
-
-void GameWindow::onRestartAccepted()
-{
-    closeResultDialog();  // 对方同意：我方结果框（若开着）一并关闭
-    m_restartPending = false;
-    resetBoard();
-    updateTurnHint();
-    setStatus(QStringLiteral("对方同意重开 · 新的一局"));
-}
-
-void GameWindow::onRestartRejected()
-{
-    closeResultDialog();  // 对方拒绝：我方结果框（若开着）一并关闭
-    m_restartPending = false;
-    setStatus(QStringLiteral("对方拒绝了重开请求"));
 }
 
 void GameWindow::onDisconnected()
 {
-    closeResultDialog();  // 断开：结果框（若开着）一并关闭，防止手动关闭误触发断开逻辑
+    closeResultDialog();   // 断开：结果框（若开着）一并关闭，防止手动关闭误触发断开逻辑
     // 对局中且非本地主动断开、且未弹过结果 → 对方认输（QUIT 或掉线）
     const bool inGame = moveCount() > 0;
     const bool opponentLeft = inGame && !m_localDisconnect && !m_resultShown;
@@ -473,6 +461,7 @@ void GameWindow::resetBoard()
     m_gameOver = false;
     m_resultShown = false;
     m_restartPending = false;
+    m_peerRestartRequested = false;
     resetBoardContents();
 }
 

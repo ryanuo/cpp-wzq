@@ -14,7 +14,7 @@ class QTimer;
 // 协议（'\n' 结尾的 ASCII 行）：
 //   发现:  GOMOKU1|HELLO|<sha256(密码)hex>|<nonce>    (UDP 广播, 每 1s)
 //   握手:  HELLO <sha256(密码)hex>                    (TCP 双向)
-//   对局:  MOVE <row> <col> / RESTART_REQ / RESTART_OK / RESTART_NO
+//   对局:  MOVE <row> <col> / RESTART_REQ（双方都点「再来一局」即重开）
 //          / UNDO / UNDO_OK / UNDO_NO / SURRENDER / QUIT / ERR
 //
 // 角色协商：nonce 较小者 = HOST（执黑先手，TCP 服务端）；
@@ -40,8 +40,7 @@ public:
 
     void sendMove(int row, int col);
     void sendMoveFromTo(int fr, int fc, int tr, int tc);  // 象棋：起止格走子
-    void sendRestartRequest();     // 请求再来一局（需对方同意）
-    void sendRestartReply(bool accept);
+    void sendRestartRequest();     // 请求再来一局（双方都点即重开）
     void sendUndo();       // 发送悔棋请求（对方确认后双方撤回最后一手）
     void sendUndoReply(bool accept);
     void sendSurrender();  // 认输（对局结束，随后断开）
@@ -52,9 +51,7 @@ signals:
     void searchFailed(const QString& reason);  // 配对失败/中断（UI 应恢复可重试）
     void moveReceived(int row, int col);
     void moveFromToReceived(int fr, int fc, int tr, int tc);  // 象棋走子（起止格）
-    void restartRequested();      // 对方请求再来一局
-    void restartAccepted();       // 对方同意重开（双方重置棋盘）
-    void restartRejected();       // 对方拒绝重开
+    void restartRequested();      // 对方点「再来一局」（双方都点即重开）
     void undoRequested();             // 对方请求悔棋
     void undoAccepted();              // 对方同意悔棋（双方撤回最后一手）
     void undoRejected();              // 对方拒绝悔棋
