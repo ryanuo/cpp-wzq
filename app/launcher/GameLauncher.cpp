@@ -1,11 +1,21 @@
 #include "GameLauncher.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QGraphicsDropShadowEffect>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
+#include <QMenuBar>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPushButton>
+#include <QStandardPaths>
+#include <QStatusBar>
 #include <QVBoxLayout>
+
+#include "UpdateChecker.h"
+#include "UpdateInstaller.h"
 
 #include "../../games/gomoku/GomokuWindow.h"
 #include "../../games/xiangqi/XiangqiWindow.h"
@@ -126,6 +136,23 @@ GameLauncher::GameLauncher(QWidget* parent)
     connect(m_gomokuCard, &QPushButton::clicked, this, &GameLauncher::openGomoku);
     connect(m_xiangqiCard, &QPushButton::clicked, this, &GameLauncher::openXiangqi);
 
+    // 菜单栏：帮助（检查更新 / 关于）
+    auto* helpMenu = menuBar()->addMenu(QStringLiteral("帮助"));
+    m_updateAct = helpMenu->addAction(QStringLiteral("检查更新"));
+    QAction* aboutAct = helpMenu->addAction(QStringLiteral("关于"));
+    connect(m_updateAct, &QAction::triggered, this, &GameLauncher::onCheckUpdateClicked);
+    connect(aboutAct, &QAction::triggered, this, &GameLauncher::onAboutClicked);
+
+    // OTA 更新（通用组件：仓库名 + 资产前缀，与游戏窗口一致）
+    m_updater = new UpdateChecker(QStringLiteral("ryanuo/cpp-wzq"),
+                                  QStringLiteral("gobang-"), this);
+    connect(m_updater, &UpdateChecker::updateAvailable, this, &GameLauncher::onUpdateAvailable);
+    connect(m_updater, &UpdateChecker::upToDate, this, &GameLauncher::onUpToDate);
+    connect(m_updater, &UpdateChecker::checkFailed, this, &GameLauncher::onCheckFailed);
+    connect(m_updater, &UpdateChecker::downloadProgress, this, &GameLauncher::onDownloadProgress);
+    connect(m_updater, &UpdateChecker::downloadFinished, this, &GameLauncher::onDownloadFinished);
+    connect(m_updater, &UpdateChecker::downloadFailed, this, &GameLauncher::onDownloadFailed);
+
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
     layout->setSpacing(16);
@@ -162,4 +189,97 @@ void GameLauncher::openXiangqi()
 void GameLauncher::onGameClosed()
 {
     show();
+}
+
+// ---- 帮助菜单 ----
+
+void GameLauncher::onCheckUpdateClicked()
+{
+    m_updateAct->setEnabled(false);
+    statusBar()->showMessage(QStringLiteral("正在检查更新…"));
+    m_updater->checkForUpdate();
+}
+
+void GameLauncher::onAboutClicked()
+{
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("关于"));
+    box.setTextFormat(Qt::RichText);
+    box.setText(QStringLiteral(
+                    "<h3>棋类对战（五子棋 / 象棋）</h3>"
+                    "<p>局域网双人对战小游戏：五子棋 19×19、象棋 9×10（吃将即胜）。"
+                    "支持密码配对联机、悔棋、认输、再来一局、OTA 自动更新。</p>"
+                    "<p>版本：v%1</p>"
+                    "<p>源码：<a href=\"https://github.com/ryanuo/cpp-wzq\">"
+                    "https://github.com/ryanuo/cpp-wzq</a></p>")
+                    .arg(QCoreApplication::applicationVersion()));
+    box.addButton(QStringLiteral("关闭"), QMessageBox::AcceptRole);
+    // 链接可点击（默认浏览器打开）
+    if (auto* label = box.findChild<QLabel*>(QStringLiteral("qt_msgbox_label")))
+    {
+        label->setOpenExternalLinks(true);
+    }
+    box.exec();
+}
+
+// ---- OTA 更新 ----
+
+void GameLauncher::onUpdateAvailable(const QString& version, const QString& assetName,
+                                     const QString& url)
+{
+    m_updateAct->setEnabled(true);
+    const auto reply = QMessageBox::question(
+        this, QStringLiteral("发现新版本"),
+        QStringLiteral("发现新版本 v%1（当前 v%2）\n\n%3\n\n是否下载并更新？")
+            .arg(version, QCoreApplication::applicationVersion(), assetName),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
+    if (reply != QMessageBox::Yes)
+    {
+        statusBar()->showMessage(QStringLiteral("已取消更新"));
+        return;
+    }
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    QDir().mkpath(dir);
+    m_updater->download(url, dir);
+    statusBar()->showMessage(QStringLiteral("正在下载更新…"));
+}
+
+void GameLauncher::onUpToDate(const QString& version)
+{
+    m_updateAct->setEnabled(true);
+    QMessageBox::information(this, QStringLiteral("检查更新"),
+                             QStringLiteral("已是最新版本 v%1").arg(version));
+    statusBar()->showMessage(QStringLiteral("已是最新版本"));
+}
+
+void GameLauncher::onCheckFailed(const QString& reason)
+{
+    m_updateAct->setEnabled(true);
+    QMessageBox::warning(this, QStringLiteral("检查更新失败"), reason);
+    statusBar()->showMessage(QStringLiteral("检查更新失败"));
+}
+
+void GameLauncher::onDownloadProgress(qint64 received, qint64 total)
+{
+    if (total > 0)
+    {
+        statusBar()->showMessage(
+            QStringLiteral("正在下载更新… %1%").arg(static_cast<int>(received * 100 / total)));
+    }
+}
+
+void GameLauncher::onDownloadFinished(const QString& filePath)
+{
+    m_updateAct->setEnabled(true);
+    statusBar()->showMessage(QStringLiteral("更新包已下载：") + filePath);
+    // 三端安装逻辑与游戏窗口共用（Windows/macOS 弹窗确认后 close 本窗口由脚本重启）
+    UpdateInstaller::install(filePath, this);
+}
+
+void GameLauncher::onDownloadFailed(const QString& reason)
+{
+    m_updateAct->setEnabled(true);
+    QMessageBox::warning(this, QStringLiteral("下载失败"),
+                         QStringLiteral("更新包下载失败：%1").arg(reason));
+    statusBar()->showMessage(QStringLiteral("下载失败"));
 }

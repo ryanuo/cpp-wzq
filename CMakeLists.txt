@@ -21,6 +21,8 @@ add_library(gobang_common STATIC
     app/common/NetworkManager.h
     app/common/UpdateChecker.cpp
     app/common/UpdateChecker.h
+    app/common/UpdateInstaller.cpp
+    app/common/UpdateInstaller.h
     app/common/ChessTypes.h
 )
 target_link_libraries(gobang_common PUBLIC Qt6::Widgets Qt6::Network Qt6::Multimedia)
