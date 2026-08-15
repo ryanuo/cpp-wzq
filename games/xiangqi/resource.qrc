@@ -1,9 +1,54 @@
 <RCC>
-    <!-- 象棋资源：4 款棋盘底图（用户提供）+ 预留棋子图 -->
+    <!-- 象棋资源：4 款棋盘底图 + 3 套棋子皮肤（经典文字 = 程序绘制；图片皮肤 = pieces/stype_N/） -->
     <qresource prefix="/res">
         <file alias="board_xq_paper.png">res/board_xq_paper.png</file>
         <file alias="board_xq_jade.png">res/board_xq_jade.png</file>
         <file alias="board_xq_pink.png">res/board_xq_pink.png</file>
         <file alias="board_xq_redwood.png">res/board_xq_redwood.png</file>
+        <!-- 棋子皮肤 1（54×54 PNG 透明，r_=红方 b_=黑方，c车 j将 m马 p炮 s士 x相 z兵/卒） -->
+        <file alias="pieces/stype_1/r_c.png">res/pieces/stype_1/r_c.png</file>
+        <file alias="pieces/stype_1/r_j.png">res/pieces/stype_1/r_j.png</file>
+        <file alias="pieces/stype_1/r_m.png">res/pieces/stype_1/r_m.png</file>
+        <file alias="pieces/stype_1/r_p.png">res/pieces/stype_1/r_p.png</file>
+        <file alias="pieces/stype_1/r_s.png">res/pieces/stype_1/r_s.png</file>
+        <file alias="pieces/stype_1/r_x.png">res/pieces/stype_1/r_x.png</file>
+        <file alias="pieces/stype_1/r_z.png">res/pieces/stype_1/r_z.png</file>
+        <file alias="pieces/stype_1/b_c.png">res/pieces/stype_1/b_c.png</file>
+        <file alias="pieces/stype_1/b_j.png">res/pieces/stype_1/b_j.png</file>
+        <file alias="pieces/stype_1/b_m.png">res/pieces/stype_1/b_m.png</file>
+        <file alias="pieces/stype_1/b_p.png">res/pieces/stype_1/b_p.png</file>
+        <file alias="pieces/stype_1/b_s.png">res/pieces/stype_1/b_s.png</file>
+        <file alias="pieces/stype_1/b_x.png">res/pieces/stype_1/b_x.png</file>
+        <file alias="pieces/stype_1/b_z.png">res/pieces/stype_1/b_z.png</file>
+        <!-- 棋子皮肤 2 -->
+        <file alias="pieces/stype_2/r_c.png">res/pieces/stype_2/r_c.png</file>
+        <file alias="pieces/stype_2/r_j.png">res/pieces/stype_2/r_j.png</file>
+        <file alias="pieces/stype_2/r_m.png">res/pieces/stype_2/r_m.png</file>
+        <file alias="pieces/stype_2/r_p.png">res/pieces/stype_2/r_p.png</file>
+        <file alias="pieces/stype_2/r_s.png">res/pieces/stype_2/r_s.png</file>
+        <file alias="pieces/stype_2/r_x.png">res/pieces/stype_2/r_x.png</file>
+        <file alias="pieces/stype_2/r_z.png">res/pieces/stype_2/r_z.png</file>
+        <file alias="pieces/stype_2/b_c.png">res/pieces/stype_2/b_c.png</file>
+        <file alias="pieces/stype_2/b_j.png">res/pieces/stype_2/b_j.png</file>
+        <file alias="pieces/stype_2/b_m.png">res/pieces/stype_2/b_m.png</file>
+        <file alias="pieces/stype_2/b_p.png">res/pieces/stype_2/b_p.png</file>
+        <file alias="pieces/stype_2/b_s.png">res/pieces/stype_2/b_s.png</file>
+        <file alias="pieces/stype_2/b_x.png">res/pieces/stype_2/b_x.png</file>
+        <file alias="pieces/stype_2/b_z.png">res/pieces/stype_2/b_z.png</file>
+        <!-- 棋子皮肤 3 -->
+        <file alias="pieces/stype_3/r_c.png">res/pieces/stype_3/r_c.png</file>
+        <file alias="pieces/stype_3/r_j.png">res/pieces/stype_3/r_j.png</file>
+        <file alias="pieces/stype_3/r_m.png">res/pieces/stype_3/r_m.png</file>
+        <file alias="pieces/stype_3/r_p.png">res/pieces/stype_3/r_p.png</file>
+        <file alias="pieces/stype_3/r_s.png">res/pieces/stype_3/r_s.png</file>
+        <file alias="pieces/stype_3/r_x.png">res/pieces/stype_3/r_x.png</file>
+        <file alias="pieces/stype_3/r_z.png">res/pieces/stype_3/r_z.png</file>
+        <file alias="pieces/stype_3/b_c.png">res/pieces/stype_3/b_c.png</file>
+        <file alias="pieces/stype_3/b_j.png">res/pieces/stype_3/b_j.png</file>
+        <file alias="pieces/stype_3/b_m.png">res/pieces/stype_3/b_m.png</file>
+        <file alias="pieces/stype_3/b_p.png">res/pieces/stype_3/b_p.png</file>
+        <file alias="pieces/stype_3/b_s.png">res/pieces/stype_3/b_s.png</file>
+        <file alias="pieces/stype_3/b_x.png">res/pieces/stype_3/b_x.png</file>
+        <file alias="pieces/stype_3/b_z.png">res/pieces/stype_3/b_z.png</file>
     </qresource>
 </RCC>

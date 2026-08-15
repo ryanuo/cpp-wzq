@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMap>
 #include <QPixmap>
 #include <QWidget>
 
@@ -28,6 +29,9 @@ public:
     // 程序绘制底色风格：0 古典宣纸 / 1 青玉翡翠 / 2 柔和粉淡 / 3 沉香红木（图片未设置时生效）
     void setBoardStyle(int style);
 
+    // 棋子皮肤："" = 经典（圆形 + 汉字程序绘制）；"stype_1/2/3" = 对应图片套（res/pieces/）
+    void setPieceSkin(const QString& skin);
+
     // 逻辑棋盘尺寸（600×600：格距 60，边距 30）
     static constexpr int kLogicSize = 600;
     static constexpr int kMargin = 30;
@@ -52,11 +56,15 @@ private:
     QPointF cellPoint(int row, int col) const;  // 交叉点坐标（逻辑 600 系）
     void drawBoard(QPainter& painter);   // 程序绘制模式的网格/九宫/楚河汉界（图片模式不画）
     void drawPiece(QPainter& painter, int row, int col, int piece);
+    QPixmap piecePixmap(int piece);      // 图片皮肤：取棋子图（按枚举缓存）
+    QString pieceImagePath(int piece);   // 图片皮肤：棋子枚举 -> 资源路径（按当前皮肤目录）
 
     XiangqiChess* m_chess = nullptr;
     QPixmap m_boardBg;   // 棋盘底图（非空时优先于程序绘制）
     int m_style = 0;     // 程序绘制底色风格（0-3）
     bool m_flipped = false;  // 视角翻转（黑方视角：上下颠倒）
+    QString m_pieceSkin;      // 棋子皮肤：空 = 经典文字，非空 = 图片皮肤名
+    QMap<int, QPixmap> m_piecePixmaps;  // 图片皮肤缓存（棋子枚举 -> 图）
     int m_selRow = -1;
     int m_selCol = -1;
     int m_lastRow = -1;

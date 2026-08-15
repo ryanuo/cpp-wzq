@@ -31,6 +31,47 @@ void XiangqiBoard::setFlipped(bool flipped)
     update();
 }
 
+void XiangqiBoard::setPieceSkin(const QString& skin)
+{
+    m_pieceSkin = skin;
+    m_piecePixmaps.clear();  // 切皮肤失效缓存
+    update();
+}
+
+QString XiangqiBoard::pieceImagePath(int piece)
+{
+    const bool red = XiangqiChess::pieceBelongs(piece, true);
+    const char* name = nullptr;
+    switch (qAbs(piece))
+    {
+    case PIECE_RED_GENERAL:  name = "j"; break;  // 将/帅
+    case PIECE_RED_ADVISOR:  name = "s"; break;  // 士/仕
+    case PIECE_RED_ELEPHANT: name = "x"; break;  // 相/象
+    case PIECE_RED_HORSE:    name = "m"; break;  // 马
+    case PIECE_RED_ROOK:     name = "c"; break;  // 车
+    case PIECE_RED_CANNON:   name = "p"; break;  // 炮
+    case PIECE_RED_PAWN:     name = "z"; break;  // 兵/卒
+    default: return QString();
+    }
+    // m_pieceSkin 为皮肤目录名（stype_1/2/3）
+    return QStringLiteral(":/res/pieces/%1/%2_%3.png")
+        .arg(m_pieceSkin)
+        .arg(red ? QStringLiteral("r") : QStringLiteral("b"))
+        .arg(QLatin1String(name));
+}
+
+QPixmap XiangqiBoard::piecePixmap(int piece)
+{
+    auto it = m_piecePixmaps.constFind(piece);
+    if (it != m_piecePixmaps.constEnd())
+    {
+        return it.value();
+    }
+    const QPixmap pm(pieceImagePath(piece));
+    m_piecePixmaps.insert(piece, pm);  // 缺失资源会得到空图，缓存避免重复加载
+    return pm;
+}
+
 void XiangqiBoard::setSelected(int row, int col)
 {
     m_selRow = row;
@@ -172,6 +213,26 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
     const bool red = XiangqiChess::pieceBelongs(piece, true);
     // 半径按模式自适应：图片底图行距 50.4（逻辑）< 程序模式 60，防棋子压相邻行
     const int radius = m_boardBg.isNull() ? 25 : 22;
+
+    // 图片棋子皮肤（54×54 原图缩放到棋子直径；对方棋子旋转 180° 保持文字物理朝向）
+    if (!m_pieceSkin.isEmpty())
+    {
+        const QPixmap pm = piecePixmap(piece);
+        if (!pm.isNull())
+        {
+            const int size = radius * 2;
+            painter.save();
+            painter.translate(p.x(), p.y());
+            if (red == m_flipped)
+            {
+                painter.rotate(180);  // 对方棋子字朝对方，自己这侧看反（与经典文字一致）
+            }
+            painter.drawPixmap(-size / 2, -size / 2, size, size, pm);
+            painter.restore();
+            return;
+        }
+        // 皮肤资源缺失：回退经典文字绘制
+    }
 
     painter.setRenderHint(QPainter::Antialiasing, true);
     // 圆底

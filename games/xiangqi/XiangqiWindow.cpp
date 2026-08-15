@@ -22,13 +22,15 @@ XiangqiWindow::XiangqiWindow(QWidget* parent)
     m_centralLayout->addWidget(m_board);
     m_boardWidget = m_board;
 
-    // 皮肤菜单（4 款图片底图 + 从图片选择）
+    // 皮肤菜单（4 款图片底图 + 从图片选择 + 棋子皮肤）
     fillSkinMenu(m_skinMenu);
 
-    // 恢复上次象棋皮肤（默认古典宣纸）
+    // 恢复上次象棋皮肤（默认古典宣纸）与棋子皮肤（默认第 2 套图片棋子）
     QSettings settings;
     m_board->setBackground(settings.value(
         QStringLiteral("xiangqi_skin"), QStringLiteral(":/res/board_xq_paper.png")).toString());
+    m_board->setPieceSkin(settings.value(
+        QStringLiteral("xiangqi_piece_skin"), QStringLiteral("stype_2")).toString());
 }
 
 void XiangqiWindow::fillSkinMenu(QMenu* skinMenu)
@@ -44,6 +46,30 @@ void XiangqiWindow::fillSkinMenu(QMenu* skinMenu)
                         [this] { saveSkinPath(QStringLiteral(":/res/board_xq_redwood.png")); });
     skinMenu->addSeparator();
     skinMenu->addAction(QStringLiteral("从图片选择…"), this, [this] { chooseSkinFile(); });
+
+    // 棋子皮肤（经典文字 / 三套图片棋子）
+    skinMenu->addSeparator();
+    QMenu* pieceMenu = skinMenu->addMenu(QStringLiteral("棋子皮肤"));
+    pieceMenu->addAction(QStringLiteral("经典（汉字）"), this, [this] {
+        m_board->setPieceSkin(QString());
+        QSettings().setValue(QStringLiteral("xiangqi_piece_skin"), QString());
+        setStatus(QStringLiteral("棋子皮肤：经典汉字"));
+    });
+    pieceMenu->addAction(QStringLiteral("样式一"), this, [this] {
+        m_board->setPieceSkin(QStringLiteral("stype_1"));
+        QSettings().setValue(QStringLiteral("xiangqi_piece_skin"), QStringLiteral("stype_1"));
+        setStatus(QStringLiteral("棋子皮肤：样式一"));
+    });
+    pieceMenu->addAction(QStringLiteral("样式二"), this, [this] {
+        m_board->setPieceSkin(QStringLiteral("stype_2"));
+        QSettings().setValue(QStringLiteral("xiangqi_piece_skin"), QStringLiteral("stype_2"));
+        setStatus(QStringLiteral("棋子皮肤：样式二"));
+    });
+    pieceMenu->addAction(QStringLiteral("样式三"), this, [this] {
+        m_board->setPieceSkin(QStringLiteral("stype_3"));
+        QSettings().setValue(QStringLiteral("xiangqi_piece_skin"), QStringLiteral("stype_3"));
+        setStatus(QStringLiteral("棋子皮肤：样式三"));
+    });
 }
 
 void XiangqiWindow::saveSkinPath(const QString& path)
