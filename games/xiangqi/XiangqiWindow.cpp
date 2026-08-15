@@ -25,12 +25,12 @@ XiangqiWindow::XiangqiWindow(QWidget* parent)
     // 皮肤菜单（4 款图片底图 + 从图片选择 + 棋子皮肤）
     fillSkinMenu(m_skinMenu);
 
-    // 恢复上次象棋皮肤（默认古典宣纸）与棋子皮肤（默认第 2 套图片棋子）
+    // 恢复上次象棋皮肤（默认古典宣纸）与棋子皮肤（默认第 3 套图片棋子）
     QSettings settings;
     m_board->setBackground(settings.value(
         QStringLiteral("xiangqi_skin"), QStringLiteral(":/res/board_xq_paper.png")).toString());
     m_board->setPieceSkin(settings.value(
-        QStringLiteral("xiangqi_piece_skin"), QStringLiteral("stype_2")).toString());
+        QStringLiteral("xiangqi_piece_skin"), QStringLiteral("stype_3")).toString());
 }
 
 void XiangqiWindow::fillSkinMenu(QMenu* skinMenu)
