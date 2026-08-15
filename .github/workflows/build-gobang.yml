@@ -668,3 +668,30 @@ jobs:
           files: gobang-linux.zip
           body_path: RELEASE_NOTES.md
           fail_on_unmatched_files: false
+
+  # ============================================================
+  # 上传 Release 资产到 CNB（等三端构建全部完成后执行）
+  # 前置: CNB 仓库已有该 tag 对应的 release（tag 推送后手动/自动创建）
+  # 依赖: GIT_PASSWORD secret（CNB 访问令牌, 需仓库读写权限）
+  # ============================================================
+  upload-cnb:
+    name: Upload Assets to CNB Release
+    needs: [build-windows, build-macos, build-linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      # 汇总三端 zip（artifact 名互不相同，merge 后都在 dist/ 下）
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload to CNB Release
+        uses: docker://cnbcool/attachments:latest
+        env:
+          PLUGIN_TYPE: UPLOAD
+          PLUGIN_TAG: ${{ github.ref_name }}
+          PLUGIN_ATTACHMENTS: dist/gobang-windows-x64.zip,dist/gobang-macos.zip,dist/gobang-linux.zip
+          PLUGIN_TOKEN: ${{ secrets.GIT_PASSWORD }}
+          PLUGIN_ENDPOINT: "https://api.cnb.cool"
