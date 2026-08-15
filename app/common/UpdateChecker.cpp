@@ -292,10 +292,9 @@ void UpdateChecker::onDownloadFinished()
             const qint64 actual = QFileInfo(m_downloadTarget).size();
             if (actual != m_downloadExpectedSize)
             {
+                // 删掉坏文件，换下一个源重试（Worker 可能返回坏文件）；全部失败则提示
                 QFile::remove(m_downloadTarget);
-                emit downloadFailed(QStringLiteral("更新包下载不完整（%1/%2 字节），请重试")
-                                        .arg(actual)
-                                        .arg(m_downloadExpectedSize));
+                tryDownloadWithMirror(m_downloadTried + 1);
                 return;
             }
         }

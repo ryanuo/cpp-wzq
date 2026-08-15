@@ -6,6 +6,7 @@
 #include <QMessageBox>
 #include <QProcess>
 #include <QStandardPaths>
+#include <QStringConverter>
 #include <QTextStream>
 
 void UpdateInstaller::install(const QString& filePath, QWidget* parent)
@@ -31,6 +32,8 @@ void UpdateInstaller::install(const QString& filePath, QWidget* parent)
     if (batFile.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QTextStream ts(&batFile);
+        // bat 由 cmd 按系统编码(中文系统=GBK)解析，Qt6 默认 UTF-8 会导致中文弹窗乱码
+        ts.setEncoding(QStringConverter::System);
         ts << "@echo off\r\n"
            << "set LOG=%TEMP%\\gobang_update.log\r\n"
            << "echo %date% %time% update.bat start >> \"%LOG%\"\r\n"
