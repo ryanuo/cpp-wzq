@@ -2,6 +2,11 @@ name: Build Gobang AI (Qt)
 
 on:
   workflow_dispatch:
+    inputs:
+      cnb_tag:
+        description: '手动验证 CNB 上传时指定 Release tag（默认 main 分支名）'
+        required: false
+        type: string
   # 推送 v* tag 时自动构建并发布 Release（可从 Releases 下载对应系统版本）
   push:
     tags:
@@ -683,7 +688,8 @@ jobs:
   upload-cnb:
     name: Upload Assets to CNB Release
     needs: [build-windows, build-macos, build-linux]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # tag 触发自动跑；workflow_dispatch 用于手动验证（配合 inputs.cnb_tag 指定目标 release）
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       # 汇总三端 zip（artifact 名互不相同，merge 后都在 dist/ 下）
@@ -697,7 +703,7 @@ jobs:
         env:
           CNB_TOKEN: ${{ secrets.GIT_PASSWORD }}
           CNB_REPO: ryanuo/cpp-wzq
-          CNB_TAG: ${{ github.ref_name }}
+          CNB_TAG: ${{ inputs.cnb_tag || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -759,10 +765,12 @@ jobs:
               echo "::error::取上传地址失败 HTTP=${HTTP}, 响应: $(head -c 500 /tmp/cnb_upload.json)"
               exit 1
             fi
+            # 诊断: 打印 201 响应体（字段名以实际响应为准）
+            echo "upload-url 响应: $(head -c 300 /tmp/cnb_upload.json)"
 
-            UPLOAD_URL=$(jget /tmp/cnb_upload.json upload_url)
-            UPLOAD_TOKEN=$(jget /tmp/cnb_upload.json upload_token)
-            ASSET_PATH=$(jget /tmp/cnb_upload.json asset_path)
+            UPLOAD_URL=$(jget /tmp/cnb_upload.json upload_url || true)
+            UPLOAD_TOKEN=$(jget /tmp/cnb_upload.json upload_token || true)
+            ASSET_PATH=$(jget /tmp/cnb_upload.json asset_path || true)
             if [ -z "$UPLOAD_URL" ] || [ -z "$UPLOAD_TOKEN" ] || [ -z "$ASSET_PATH" ]; then
               echo "::error::上传地址响应缺字段, 响应: $(head -c 500 /tmp/cnb_upload.json)"
               exit 1
