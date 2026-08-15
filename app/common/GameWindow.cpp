@@ -650,29 +650,52 @@ void GameWindow::onDownloadFinished(const QString& filePath)
     setStatus(QStringLiteral("更新包已下载：") + filePath);
 
 #if defined(Q_OS_WIN)
-    // Windows：解压 + 延迟覆盖脚本（主进程退出后 xcopy 新文件，再重启）
-    // 注意：不用 timeout 命令——后台分离进程无控制台，timeout 会直接失败导致不覆盖
+    // Windows：解压 + 延迟覆盖脚本（主进程退出后复制新文件，再重启）
+    // 改进(v0.3.x): tasklist 轮询等进程真正退出(替代固定 ping, 防 exe 锁定复制失败);
+    //   xcopy /r 覆盖只读; 全程写 %TEMP%\gobang_update.log 便于排查; bat 放 %TEMP% 防自删
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString updDir = appDir + QStringLiteral("/updates");
-    QDir().mkpath(updDir + QStringLiteral("/extracted"));
+    const QString extractDir = updDir + QStringLiteral("/extracted");
+    QDir().mkpath(extractDir);
 
     QProcess::execute(QStringLiteral("powershell"),
                       {QStringLiteral("-NoProfile"), QStringLiteral("-Command"),
                        QStringLiteral("Expand-Archive -Force -LiteralPath '%1' -DestinationPath '%2'")
-                           .arg(filePath, updDir + QStringLiteral("/extracted"))});
+                           .arg(filePath, extractDir)});
 
-    QFile batFile(updDir + QStringLiteral("/update.bat"));
+    const QString batPath = QDir::temp().filePath(QStringLiteral("gobang_update.bat"));
+    QFile batFile(batPath);
     if (batFile.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QTextStream ts(&batFile);
         ts << "@echo off\r\n"
-           << "ping -n 3 127.0.0.1 >nul\r\n"
-           << "xcopy /y /e /q \"" << updDir << "\\extracted\\*\" \"" << appDir << "\\\"\r\n"
+           << "set LOG=%TEMP%\\gobang_update.log\r\n"
+           << "echo %date% %time% update.bat start >> \"%LOG%\"\r\n"
+           // 等待主进程完全退出（最多 30 秒; tasklist 找不到进程即就绪）
+           << "set /a n=0\r\n"
+           << ":waitproc\r\n"
+           << "tasklist /fi \"imagename eq gobang.exe\" | find /i \"gobang.exe\" >nul\r\n"
+           << "if errorlevel 1 goto copystart\r\n"
+           << "set /a n+=1\r\n"
+           << "if %n% geq 30 goto copystart\r\n"
+           << "ping -n 2 127.0.0.1 >nul\r\n"
+           << "goto waitproc\r\n"
+           << ":copystart\r\n"
+           << "echo %date% %time% wait done retry=%n% >> \"%LOG%\"\r\n"
+           // 解压失败检测：extracted 无 exe 则跳过复制（保留旧版）
+           << "if not exist \"" << extractDir << "\\gobang.exe\" (\r\n"
+           << "  echo %date% %time% ERROR: extracted gobang.exe missing, unzip failed >> \"%LOG%\"\r\n"
+           << "  goto cleanup\r\n"
+           << ")\r\n"
+           << "xcopy /y /r /e /q \"" << extractDir << "\\*\" \"" << appDir << "\\\" >> \"%LOG%\" 2>&1\r\n"
+           << "echo %date% %time% xcopy exit=%errorlevel% >> \"%LOG%\"\r\n"
            << "start \"\" \"" << appDir << "\\gobang.exe\"\r\n"
-           << "rmdir /s /q \"" << updDir << "\"\r\n";
+           << "echo %date% %time% relaunch issued >> \"%LOG%\"\r\n"
+           << ":cleanup\r\n"
+           << "rmdir /s /q \"" << updDir << "\" >> \"%LOG%\" 2>&1\r\n";
         batFile.close();
     }
-    QProcess::startDetached(updDir + QStringLiteral("/update.bat"));
+    QProcess::startDetached(batPath);
     close();
 #elif defined(Q_OS_MACOS)
     // macOS：解压 + 延迟替换 .app（主进程退出后脚本替换整个 bundle 并重启）
