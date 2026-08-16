@@ -249,7 +249,7 @@ jobs:
       # Upload Windows Artifact
       # ========================================================
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: gobang-windows-x64
           path: gobang-windows-x64.zip
@@ -483,7 +483,7 @@ jobs:
       # Upload macOS Artifact
       # ========================================================
       - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: gobang-macos
           path: gobang-macos.zip
@@ -721,7 +721,7 @@ jobs:
       # Upload Artifact
       # --------------------------------------------------------
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: gobang-linux
           path: gobang-linux.zip
@@ -764,7 +764,7 @@ jobs:
     steps:
       # 汇总三端 zip（artifact 名互不相同，merge 后都在 dist/ 下）
       - name: Download All Artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           path: dist
           merge-multiple: true
