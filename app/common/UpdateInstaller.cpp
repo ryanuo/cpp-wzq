@@ -35,7 +35,8 @@ void UpdateInstaller::install(const QString& filePath, QWidget* parent)
         // bat 由 cmd 按系统编码(中文系统=GBK)解析，Qt6 默认 UTF-8 会导致中文弹窗乱码
         ts.setEncoding(QStringConverter::System);
         ts << "@echo off\r\n"
-           << "set LOG=%TEMP%\\gobang_update.log\r\n"
+           << "set LOG=%TEMP%\\\\gobang_update.log\r\n"
+           << "set \"ZIP=" << filePath << "\"\r\n"
            << "echo %date% %time% update.bat start >> \"%LOG%\"\r\n"
            // 等待主进程完全退出（最多 30 秒; tasklist 找不到进程即就绪）
            << "set /a n=0\r\n"
@@ -64,7 +65,8 @@ void UpdateInstaller::install(const QString& filePath, QWidget* parent)
            << "start \"\" \"" << appDir << "\\gobang.exe\"\r\n"
            << "echo %date% %time% relaunch issued >> \"%LOG%\"\r\n"
            << ":cleanup\r\n"
-           << "rmdir /s /q \"" << updDir << "\" >> \"%LOG%\" 2>&1\r\n";
+           << "rmdir /s /q \"" << updDir << "\" >> \"%LOG%\" 2>&1\r\n"
+           << "del /q \"%ZIP%\" >> \"%LOG%\" 2>&1\r\n";
         batFile.close();
     }
     // 弹窗确认后再启动更新脚本：用户在弹窗停留时 bat 不会提前跑（避免等超时）
@@ -94,6 +96,7 @@ void UpdateInstaller::install(const QString& filePath, QWidget* parent)
            << "unzip -o -q \"$ZIP\" -d \"$UPD/extracted\" || exit 1\n"
            << "rm -rf \"$BUNDLE_PARENT/gobang.app\"\n"
            << "cp -R \"$UPD/extracted/gobang.app\" \"$BUNDLE_PARENT/gobang.app\"\n"
+           << "rm -f \"$ZIP\"\n"
            << "rm -rf \"$UPD\"\n"
            << "open \"$BUNDLE_PARENT/gobang.app\"\n";
         scriptFile.close();

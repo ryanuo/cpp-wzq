@@ -225,12 +225,26 @@ void UpdateChecker::download(const QString& url, const QString& destDir,
     m_downloadTarget = destDir + QLatin1Char('/') + fileName;
 
     // 清理下载目录的旧文件：上次失败/中断可能残留坏 zip（大小不符），
-    // 不删会导致本次下载与旧文件冲突、或误用旧文件
-    QFile::remove(m_downloadTarget);
+    // 不删会导致本次下载与旧文件冲突、或误用旧文件。
+    // Windows 上旧文件可能带只读属性，直接 remove 会失败 → removeDownloadFile 先清只读
+    removeDownloadFile();
 
     // 从第一个镜像开始下载；失败依次切换，最后官方兜底
     m_downloadTried = 0;
     tryDownloadWithMirror(0);
+}
+
+void UpdateChecker::removeDownloadFile()
+{
+    QFile file(m_downloadTarget);
+    if (file.exists())
+    {
+        // Windows 上删除只读文件会失败（Qt remove 不自动清只读属性）
+        file.setPermissions(file.permissions() | QFileDevice::WriteOwner
+                            | QFileDevice::WriteUser | QFileDevice::WriteGroup
+                            | QFileDevice::WriteOther);
+        file.remove();
+    }
 }
 
 void UpdateChecker::tryDownloadWithMirror(int index)
@@ -243,6 +257,9 @@ void UpdateChecker::tryDownloadWithMirror(int index)
         return;
     }
     m_downloadTried = index;
+    // 每个新源开始都重置首写标志：即使旧文件删除失败（被占用），
+    // 首次写入也用截断模式清空重写，保证不会与旧内容拼接成损坏文件
+    m_downloadFirstWrite = true;
     QNetworkRequest req{QUrl(mirrorUrl(index, m_downloadRawUrl))};
     req.setRawHeader("User-Agent", "gobang-updater");
     req.setTransferTimeout(kDownloadTimeoutMs);
@@ -262,8 +279,13 @@ void UpdateChecker::onDownloadReadyRead()
         return;
     }
     QFile file(m_downloadTarget);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Append))
+    // 首写用截断模式（清空旧内容重写），之后 Append 续写
+    const QIODevice::OpenMode mode = m_downloadFirstWrite
+        ? QIODevice::WriteOnly
+        : QIODevice::WriteOnly | QIODevice::Append;
+    if (file.open(mode))
     {
+        m_downloadFirstWrite = false;
         file.write(reply->readAll());
         file.close();
     }
@@ -281,8 +303,13 @@ void UpdateChecker::onDownloadFinished()
     if (reply->error() == QNetworkReply::NoError)
     {
         QFile file(m_downloadTarget);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Append))
+        // 与 readyRead 相同：首写截断，防止与残留旧文件内容拼接
+        const QIODevice::OpenMode mode = m_downloadFirstWrite
+            ? QIODevice::WriteOnly
+            : QIODevice::WriteOnly | QIODevice::Append;
+        if (file.open(mode))
         {
+            m_downloadFirstWrite = false;
             file.write(reply->readAll());
             file.close();
         }
@@ -293,7 +320,7 @@ void UpdateChecker::onDownloadFinished()
             if (actual != m_downloadExpectedSize)
             {
                 // 删掉坏文件，换下一个源重试（Worker 可能返回坏文件）；全部失败则提示
-                QFile::remove(m_downloadTarget);
+                removeDownloadFile();
                 tryDownloadWithMirror(m_downloadTried + 1);
                 return;
             }
@@ -302,7 +329,7 @@ void UpdateChecker::onDownloadFinished()
     }
     else
     {
-        QFile::remove(m_downloadTarget);
+        removeDownloadFile();
         // 当前源失败（含超时）：切换到下一个镜像重试
         tryDownloadWithMirror(m_downloadTried + 1);
     }

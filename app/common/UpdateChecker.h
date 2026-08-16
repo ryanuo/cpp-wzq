@@ -58,6 +58,9 @@ private:
     QString releasePage() const;
     // 按镜像序号尝试下载（失败依次切换，最后官方直连兜底）
     void tryDownloadWithMirror(int index);
+    // 删除下载目标文件：Windows 上旧文件可能带只读属性（Qt remove 不自动清只读，
+    // 会删除失败导致后续 Append 写入与旧内容拼接成损坏文件），先清只读再删
+    void removeDownloadFile();
 
     QNetworkAccessManager* m_nam = nullptr;
     QString m_repoPath;     // "owner/repo"
@@ -67,4 +70,6 @@ private:
     QString m_downloadRawUrl;   // 原始下载 URL（未加镜像前缀）
     qint64 m_downloadExpectedSize = -1;  // 期望文件大小（API 返回，下载后校验）
     int m_downloadTried = 0;    // 下载已尝试的镜像数
+    bool m_downloadFirstWrite = false;  // 首写标志：每个源首次写入用截断模式（清空重写，
+                                        // 不依赖旧文件删除成功，防止与旧内容拼接）
 };
