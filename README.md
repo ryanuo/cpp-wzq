@@ -128,5 +128,3 @@ https://ghfast.top
 curl -s -o /dev/null -w "%{http_code}\n" --max-time 15 \
   "https://<镜像>/https://github.com/ryanuo/cpp-wzq/releases/download/v0.3.0/gobang-windows-x64.zip"
 ```
-
-两项都通才可用，把可用的镜像前缀（带 `https://` 和结尾 `/`）按速度排序填入 `kMirrorPrefixes`，无需改其他代码（`kMirrorCount` 自动按数组长度计算）。
