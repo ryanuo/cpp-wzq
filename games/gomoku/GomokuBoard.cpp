@@ -28,12 +28,21 @@ float GomokuBoard::scaleFactor() const
     return qMax(0.1f, s);
 }
 
+QPointF GomokuBoard::boardOrigin() const
+{
+    // 棋盘按 scale 缩放后的实际像素边长，超出控件宽/高的部分均分到两侧 -> 居中
+    const float boardPx = kLogicSize * scaleFactor();
+    return QPointF((width() - boardPx) / 2.0f, (height() - boardPx) / 2.0f);
+}
+
 void GomokuBoard::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
     const float scale = scaleFactor();
+    const QPointF origin = boardOrigin();
 
     painter.save();
+    painter.translate(origin);
     painter.scale(scale, scale);
 
     // 背景图（按逻辑尺寸 600x600 铺满，scale 变换下自动等比缩放）
@@ -77,6 +86,7 @@ void GomokuBoard::paintEvent(QPaintEvent* /*event*/)
         if (m_lastRow < gradeSize && m_lastCol < gradeSize)
         {
             painter.save();
+            painter.translate(origin);
             painter.scale(scale, scale);
             painter.setBrush(QColor(230, 40, 40));
             painter.setPen(Qt::NoPen);
@@ -95,10 +105,11 @@ void GomokuBoard::mousePressEvent(QMouseEvent* event)
         return;
     }
 
-    // 屏幕坐标 -> 逻辑坐标（除以缩放系数）
+    // 屏幕坐标 -> 逻辑坐标（先减居中偏移，再除以缩放系数）
     const float scale = scaleFactor();
-    const int logicX = static_cast<int>(event->pos().x() / scale);
-    const int logicY = static_cast<int>(event->pos().y() / scale);
+    const QPointF origin = boardOrigin();
+    const int logicX = static_cast<int>((event->pos().x() - origin.x()) / scale);
+    const int logicY = static_cast<int>((event->pos().y() - origin.y()) / scale);
 
     ChessPos pos;
     if (m_chess->clickBoard(logicX, logicY, &pos))

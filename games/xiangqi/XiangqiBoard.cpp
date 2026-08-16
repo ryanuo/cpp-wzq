@@ -101,10 +101,19 @@ void XiangqiBoard::setBoardStyle(int style)
     update();
 }
 
+QPointF XiangqiBoard::boardOrigin() const
+{
+    // 棋盘按 scale 缩放后的实际像素边长，超出控件宽/高的部分均分到两侧 -> 居中
+    const float scale = qMin(width(), height()) / static_cast<float>(kLogicSize);
+    const float boardPx = kLogicSize * scale;
+    return QPointF((width() - boardPx) / 2.0f, (height() - boardPx) / 2.0f);
+}
+
 void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
     const float scale = qMin(width(), height()) / static_cast<float>(kLogicSize);
+    painter.translate(boardOrigin());
     painter.scale(scale, scale);
 
     // 底：图片（用户棋盘图，自带网格）或按风格程序绘制
@@ -290,7 +299,9 @@ void XiangqiBoard::mousePressEvent(QMouseEvent* event)
         return;
     }
     const float scale = qMin(width(), height()) / static_cast<float>(kLogicSize);
-    const QPointF logic(event->pos().x() / scale, event->pos().y() / scale);
+    const QPointF origin = boardOrigin();
+    const QPointF logic((event->pos().x() - origin.x()) / scale,
+                        (event->pos().y() - origin.y()) / scale);
 
     // 找最近的交叉点（图片网格按图校准，可能非均匀）
     int bestRow = -1, bestCol = -1;

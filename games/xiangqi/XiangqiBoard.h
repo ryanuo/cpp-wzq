@@ -54,6 +54,7 @@ protected:
 
 private:
     QPointF cellPoint(int row, int col) const;  // 交叉点坐标（逻辑 600 系）
+    QPointF boardOrigin() const;        // 棋盘左上角偏移（居中：宽/高超出棋盘的部分均分）
     void drawBoard(QPainter& painter);   // 程序绘制模式的网格/九宫/楚河汉界（图片模式不画）
     void drawPiece(QPainter& painter, int row, int col, int piece);
     QPixmap piecePixmap(int piece);      // 图片皮肤：取棋子图（按枚举缓存）

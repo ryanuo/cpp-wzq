@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QPointF>
 #include <QPixmap>
 #include <QString>
 #include <QWidget>
@@ -48,6 +49,8 @@ protected:
 private:
     // 当前缩放系数 = min(宽,高)/600，绘制与鼠标换算共用
     float scaleFactor() const;
+    // 棋盘左上角偏移（居中：宽/高超出棋盘的部分均分到两侧）
+    QPointF boardOrigin() const;
 
     GomokuChess* m_chess = nullptr;
     QPixmap m_boardBg;
