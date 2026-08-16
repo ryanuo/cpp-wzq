@@ -142,6 +142,7 @@ void GameWindow::closeEvent(QCloseEvent* event)
     // 对局中关闭窗口 = 主动退出 = 认输（与「断开」一致，对端走认输流程）
     if (m_connected && moveCount() > 0 && !m_gameOver && !m_resultShown)
     {
+        m_localDisconnect = true;  // 本地主动退出：stop() 触发的 disconnected 不再误判为"对方退出"
         m_network->sendSurrender();
     }
     m_network->stop();
