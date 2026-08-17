@@ -328,12 +328,19 @@ void GameWindow::onConnected(bool isHost)
     m_bgPlayer->play();
     m_startSound->play();
 
-    // 状态栏显示执子 + 对手 IP
+    // 状态栏显示执子 + 对手 IP（先手/后手名称由子类 sideName 提供：五子棋黑/白，象棋红/黑）
     const QString peerIp = m_network->peerAddress().toString();
-    setStatus(isHost ? QStringLiteral("已连接 · 你执黑（先手） · 对手 IP: ") + peerIp
-                     : QStringLiteral("已连接 · 你执白（后手） · 对手 IP: ") + peerIp);
+    setStatus(QStringLiteral("已连接 · 你执%1（%2） · 对手 IP: %3")
+                  .arg(sideName(m_myKind),
+                       isHost ? QStringLiteral("先手") : QStringLiteral("后手"), peerIp));
     setWindowTitle(windowTitle() + QStringLiteral(" - 对手 ") + peerIp);
     updateTurnHint();
+}
+
+QString GameWindow::sideName(chess_kind_t kind) const
+{
+    // 五子棋：先手黑 / 后手白（象棋子类覆盖为 红/黑）
+    return kind == CHESS_BLACK ? QStringLiteral("黑") : QStringLiteral("白");
 }
 
 void GameWindow::onRestartRequested()

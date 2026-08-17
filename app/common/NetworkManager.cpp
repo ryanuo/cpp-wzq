@@ -421,8 +421,9 @@ void NetworkManager::checkHandshake()
         m_connected = true;
         m_pairTimeout->stop();
         m_countdownTimer->stop();
-        emit statusChanged(m_isHost ? QStringLiteral("已连接 · 你执黑（先手）")
-                                    : QStringLiteral("已连接 · 你执白（后手）"));
+        // 通用文案不带颜色（五子棋黑/白、象棋红/黑由 GameWindow::onConnected 的 sideName 提供）
+        emit statusChanged(m_isHost ? QStringLiteral("已连接 · 配对成功（先手）")
+                                    : QStringLiteral("已连接 · 配对成功（后手）"));
         emit connected(m_isHost);
     }
 }

@@ -51,6 +51,8 @@ protected:
     virtual bool isBlackTurn() const = 0;                  // 当前是否先手方回合（五子棋黑 / 象棋红）
     virtual QString myTurnText() const = 0;                // 回合提示："● 轮到你落子（黑）" 等
     virtual QString waitText() const = 0;                  // 回合提示："○ 等待对方落子…"
+    // 先手/后手方名称（连接状态栏"你执X（先手）"用；五子棋黑/白，象棋红/黑）
+    virtual QString sideName(chess_kind_t kind) const;
     virtual void applyBoardBackground(const QString& imagePath) = 0; // 换肤：转调具体棋盘的 setBackground
 
 protected slots:
