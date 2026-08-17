@@ -154,8 +154,11 @@ void XiangqiWindow::onMoveFromToReceived(int fr, int fc, int tr, int tc)
 
 void XiangqiWindow::doLocalMove(int fr, int fc, int tr, int tc, bool notify)
 {
+    // 被吃棋子：doMove 前的目标格棋子（无子则 PIECE_NONE），动画期间显示待被覆盖
+    const int captured = m_chess->pieceAt(tr, tc);
     m_chess->doMove(fr, fc, tr, tc);
-    m_board->repaintBoard();
+    // 走子动画：棋子从起点平滑移到目标格（消除瞬移的生硬感）
+    m_board->startMoveAnimation(fr, fc, tr, tc, m_chess->pieceAt(tr, tc), captured);
     m_board->clearSelected();
     m_board->setLastMove(tr, tc);
     m_downSound->play();
@@ -164,6 +167,12 @@ void XiangqiWindow::doLocalMove(int fr, int fc, int tr, int tc, bool notify)
         m_network->sendMoveFromTo(fr, fc, tr, tc);
     }
     updateTurnHint();
+}
+
+QString XiangqiWindow::sideName(chess_kind_t kind) const
+{
+    // 象棋：先手方 = 红（CHESS_BLACK 约定为先手方），后手方 = 黑
+    return kind == CHESS_BLACK ? QStringLiteral("红") : QStringLiteral("黑");
 }
 
 bool XiangqiWindow::canPlace(int row, int col) const
@@ -230,6 +239,7 @@ void XiangqiWindow::resetBoardContents()
     m_chess->init();
     // 视角：自己始终在下方（执黑时棋盘上下翻转，对方在上）
     m_board->setFlipped(m_myKind == CHESS_WHITE);
+    m_board->stopAnimation();  // 清盘：停止进行中的走子动画
     m_selectedRow = m_selectedCol = -1;
     m_board->repaintBoard();
     m_board->clearSelected();
@@ -241,6 +251,7 @@ bool XiangqiWindow::undoLastMove()
     if (m_chess->undoLast())
     {
         m_selectedRow = m_selectedCol = -1;
+        m_board->stopAnimation();  // 悔棋：棋子回到原位，停止动画
         m_board->repaintBoard();
         m_board->clearSelected();
         m_board->clearLastMove();

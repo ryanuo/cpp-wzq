@@ -1,7 +1,9 @@
 #include "XiangqiBoard.h"
 
+#include <QDateTime>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QTimer>
 
 XiangqiBoard::XiangqiBoard(QWidget* parent)
     : QWidget(parent)
@@ -10,6 +12,18 @@ XiangqiBoard::XiangqiBoard(QWidget* parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_selBoxRed.load(QStringLiteral(":/res/pieces/r_box.png"));
     m_selBoxBlack.load(QStringLiteral(":/res/pieces/b_box.png"));
+
+    // 走子动画定时器：16ms 一帧触发重绘，动画进度按时间戳计算，完成自动停止
+    m_animTimer = new QTimer(this);
+    m_animTimer->setInterval(16);
+    connect(m_animTimer, &QTimer::timeout, this, [this] {
+        update();
+        if (m_animPiece != PIECE_NONE
+            && QDateTime::currentMSecsSinceEpoch() - m_animStartMs >= kAnimDurationMs)
+        {
+            stopAnimation();
+        }
+    });
 }
 
 // 交叉点坐标（逻辑 600 系）：图片模式按图片网格校准，程序模式用固定边距/格距
@@ -151,11 +165,30 @@ void XiangqiBoard::paintEvent(QPaintEvent* /*event*/)
         for (int c = 0; c < XiangqiChess::kCols; c++)
         {
             const int piece = m_chess->pieceAt(r, c);
+            // 动画期间目标格：不吃子则隐藏（由飞行棋子代替）；吃子则显示被吃棋子待覆盖
+            if (m_animPiece != PIECE_NONE && r == m_animToRow && c == m_animToCol)
+            {
+                if (m_animCaptured != PIECE_NONE)
+                {
+                    drawPiece(painter, r, c, m_animCaptured);
+                }
+                continue;
+            }
             if (piece != PIECE_NONE)
             {
                 drawPiece(painter, r, c, piece);
             }
         }
+    }
+
+    // 走子动画中的棋子（飞行中，画在最上层；到达终点与目标格棋子重叠无感）
+    if (m_animPiece != PIECE_NONE)
+    {
+        const qreal t = qMin(1.0, qreal(QDateTime::currentMSecsSinceEpoch() - m_animStartMs)
+                                      / kAnimDurationMs);
+        const qreal eased = 1.0 - (1.0 - t) * (1.0 - t);  // 缓出：起步快、接近目标减速
+        const QPointF pos = m_animFrom + (m_animTo - m_animFrom) * eased;
+        drawPieceAt(painter, pos, m_animPiece);
     }
 
     // 选中高亮（最上层）：按棋子阵营选框（红子 r_box 红环 / 黑子 b_box 黑环）
@@ -240,12 +273,16 @@ void XiangqiBoard::drawBoard(QPainter& painter)
 
 void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
 {
-    const QPointF p = cellPoint(row, col);
+    drawPieceAt(painter, cellPoint(row, col), piece);
+}
+
+void XiangqiBoard::drawPieceAt(QPainter& painter, const QPointF& p, int piece)
+{
     const bool red = XiangqiChess::pieceBelongs(piece, true);
     // 棋子直径统一 52px（radius 26）：图片/程序模式一致，选中框无需两套尺寸
     const int radius = 26;
 
-    // 图片棋子皮肤（54×54 原图缩放到棋子直径；对方棋子旋转 180° 保持文字物理朝向）
+    // 图片棋子皮肤（54×54 原图缩放到棋子直径；所有棋子字朝主视角，不随视角旋转）
     if (!m_pieceSkin.isEmpty())
     {
         const QPixmap pm = piecePixmap(piece);
@@ -254,10 +291,6 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
             const int size = radius * 2;
             painter.save();
             painter.translate(p.x(), p.y());
-            if (red == m_flipped)
-            {
-                painter.rotate(180);  // 对方棋子字朝对方，自己这侧看反（与经典文字一致）
-            }
             painter.drawPixmap(-size / 2, -size / 2, size, size, pm);
             painter.restore();
             return;
@@ -271,25 +304,42 @@ void XiangqiBoard::drawPiece(QPainter& painter, int row, int col, int piece)
     painter.setBrush(red ? QColor(248, 220, 200) : QColor(230, 230, 225));
     painter.drawEllipse(p, radius, radius);
 
-    // 汉字
+    // 汉字（所有棋子字都朝主视角，不倒装）
     QFont f = painter.font();
     f.setPixelSize(radius * 2 - 24);
     f.setBold(true);
     painter.setFont(f);
     painter.setPen(red ? QColor(170, 30, 20) : QColor(40, 40, 40));
-    painter.save();
-    if (red == m_flipped)
-    {
-        // 物理正确的棋子文字方向：对方棋子字朝向对方那侧，自己这侧看是反的
-        //   黑方（翻转）视角：红方棋子反、自己黑子正
-        //   红方（正向）视角：黑方棋子反、自己红子正
-        painter.translate(p.x(), p.y());
-        painter.rotate(180);
-        painter.translate(-p.x(), -p.y());
-    }
     painter.drawText(QRectF(p.x() - radius, p.y() - radius, radius * 2, radius * 2),
                      Qt::AlignCenter, QString::fromUtf8(XiangqiChess::pieceName(piece)));
-    painter.restore();
+}
+
+void XiangqiBoard::startMoveAnimation(int fr, int fc, int tr, int tc, int piece, int captured)
+{
+    m_animPiece = piece;
+    m_animToRow = tr;
+    m_animToCol = tc;
+    m_animCaptured = captured;
+    m_animFrom = cellPoint(fr, fc);
+    m_animTo = cellPoint(tr, tc);
+    m_animStartMs = QDateTime::currentMSecsSinceEpoch();
+    if (!m_animTimer->isActive())
+    {
+        m_animTimer->start();
+    }
+    update();
+}
+
+void XiangqiBoard::stopAnimation()
+{
+    if (m_animTimer)
+    {
+        m_animTimer->stop();
+    }
+    m_animPiece = PIECE_NONE;
+    m_animToRow = m_animToCol = -1;
+    m_animCaptured = PIECE_NONE;
+    update();
 }
 
 void XiangqiBoard::mousePressEvent(QMouseEvent* event)

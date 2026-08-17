@@ -29,6 +29,7 @@ protected:
     bool isBlackTurn() const override;
     QString myTurnText() const override;
     QString waitText() const override;
+    QString sideName(chess_kind_t kind) const override;
     void applyBoardBackground(const QString& imagePath) override;
 
 private:
